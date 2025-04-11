@@ -1,0 +1,354 @@
+<script>
+  // Variables globales
+  let config = {};
+  let statsData = {
+    totalProcessed: 0,
+    totalLabeled: 0,
+    domainStats: {},
+    lastRun: null
+  };
+  
+  // Inicializar la interfaz al cargar
+  document.addEventListener('DOMContentLoaded', function() {
+    loadConfig();
+    loadStats();
+  });
+  
+  // Cargar la configuración desde el servidor
+  function loadConfig() {
+    showStatus('processStatus', 'Cargando configuración...', 'info');
+    google.script.run
+      .withSuccessHandler(updateUI)
+      .withFailureHandler(handleError)
+      .getConfig();
+  }
+  
+  // Cargar estadísticas
+  function loadStats() {
+    google.script.run
+      .withSuccessHandler(updateStatsUI)
+      .withFailureHandler(handleError)
+      .getStats();
+  }
+  
+  // Actualizar la interfaz con la configuración cargada
+  function updateUI(loadedConfig) {
+    config = loadedConfig;
+    
+    document.getElementById('maxEmails').value = config.maxEmails;
+    
+    // Configurar el selector de días
+    const daysBackSelect = document.getElementById('daysBack');
+    if (config.daysBack === -1) {
+      daysBackSelect.value = "-1"; // Opción "Todos"
+    } else {
+      daysBackSelect.value = config.daysBack;
+    }
+    
+    // Configurar opciones de procesamiento automático
+    document.getElementById('autoProcess').checked = config.autoProcess;
+    document.getElementById('processHour').value = config.processHour;
+    
+    updateDomainTags();
+    hideStatus('processStatus');
+  }
+  
+  // Actualizar la interfaz con las estadísticas
+  function updateStatsUI(loadedStats) {
+    if (loadedStats) {
+      statsData = loadedStats;
+      
+      // Actualizar los contadores principales
+      document.getElementById('totalProcessed').textContent = statsData.totalProcessed || 0;
+      document.getElementById('totalLabeled').textContent = statsData.totalLabeled || 0;
+      
+      // Actualizar la fecha de última ejecución
+      if (statsData.lastRun) {
+        const date = new Date(statsData.lastRun);
+        document.getElementById('lastRun').textContent = date.toLocaleString();
+      } else {
+        document.getElementById('lastRun').textContent = 'Nunca';
+      }
+      
+      // Actualizar las estadísticas de dominios
+      updateDomainStats();
+      
+      // Generar el gráfico
+      generateChart();
+    }
+  }
+  
+  // Generar gráfico de barras
+  function generateChart() {
+    const chartContainer = document.getElementById('chartContainer');
+    chartContainer.innerHTML = '';
+    
+    // Ordenar dominios por cantidad de correos (descendente)
+    const sortedDomains = Object.keys(statsData.domainStats || {}).sort((a, b) => {
+      return (statsData.domainStats[b] || 0) - (statsData.domainStats[a] || 0);
+    });
+    
+    // Mostrar solo los 5 dominios principales para el gráfico
+    const topDomains = sortedDomains.slice(0, 5);
+    
+    if (topDomains.length === 0) {
+      chartContainer.innerHTML = '<p>No hay datos suficientes para mostrar un gráfico</p>';
+      return;
+    }
+    
+    // Encontrar el valor máximo para escalar las barras
+    const maxValue = Math.max(...topDomains.map(domain => statsData.domainStats[domain]));
+    
+    // Crear barras para cada dominio
+    topDomains.forEach(domain => {
+      const count = statsData.domainStats[domain] || 0;
+      const percentage = (count / maxValue) * 100;
+      
+      const barContainer = document.createElement('div');
+      barContainer.style.width = '100%';
+      barContainer.style.marginBottom = '10px';
+      
+      const bar = document.createElement('div');
+      bar.className = 'chart-bar';
+      bar.style.width = percentage + '%';
+      
+      const label = document.createElement('span');
+      label.className = 'chart-bar-label';
+      label.textContent = domain;
+      
+      const value = document.createElement('span');
+      value.className = 'chart-bar-value';
+      value.textContent = count;
+      
+      bar.appendChild(label);
+      bar.appendChild(value);
+      barContainer.appendChild(bar);
+      chartContainer.appendChild(barContainer);
+    });
+    
+    // Añadir leyenda
+    const legend = document.createElement('div');
+    legend.className = 'chart-legend';
+    legend.innerHTML = '<span>Dominios más frecuentes</span><span>Cantidad de correos</span>';
+    chartContainer.appendChild(legend);
+  }
+  
+  // Actualizar las estadísticas de dominios
+  function updateDomainStats() {
+    const container = document.getElementById('domainStats');
+    container.innerHTML = '';
+    
+    // Ordenar dominios por cantidad de correos (descendente)
+    const sortedDomains = Object.keys(statsData.domainStats || {}).sort((a, b) => {
+      return (statsData.domainStats[b] || 0) - (statsData.domainStats[a] || 0);
+    });
+    
+    // Mostrar solo los 10 dominios principales
+    const topDomains = sortedDomains.slice(0, 10);
+    
+    if (topDomains.length === 0) {
+      container.innerHTML = '<p>No hay estadísticas disponibles</p>';
+      return;
+    }
+    
+    // Crear elementos para cada dominio
+    topDomains.forEach(domain => {
+      const count = statsData.domainStats[domain] || 0;
+      
+      const domainStat = document.createElement('div');
+      domainStat.className = 'domain-stat';
+      
+      const domainName = document.createElement('div');
+      domainName.className = 'domain-name';
+      domainName.textContent = domain;
+      
+      const domainCount = document.createElement('div');
+      domainCount.className = 'domain-count';
+      domainCount.textContent = count;
+      
+      domainStat.appendChild(domainName);
+      domainStat.appendChild(domainCount);
+      container.appendChild(domainStat);
+    });
+  }
+  
+  // Actualizar la visualización de los dominios genéricos
+  function updateDomainTags() {
+    const container = document.getElementById('domainTags');
+    container.innerHTML = '';
+    
+    config.genericDomains.forEach(function(domain) {
+      const tag = document.createElement('div');
+      tag.className = 'tag';
+      tag.innerHTML = domain + '<span class="tag-delete" onclick="removeDomain(\'' + domain + '\')">&times;</span>';
+      container.appendChild(tag);
+    });
+  }
+  
+  // Añadir un nuevo dominio a la lista de genéricos
+  function addDomain() {
+    const input = document.getElementById('newDomain');
+    const domain = input.value.trim().toLowerCase();
+    
+    if (domain && !config.genericDomains.includes(domain)) {
+      config.genericDomains.push(domain);
+      updateDomainTags();
+      input.value = '';
+    }
+  }
+  
+  // Eliminar un dominio de la lista de genéricos
+  function removeDomain(domain) {
+    config.genericDomains = config.genericDomains.filter(d => d !== domain);
+    updateDomainTags();
+  }
+  
+  // Guardar la configuración
+  function saveConfig() {
+    // Actualizar la configuración con los valores actuales
+    config.maxEmails = parseInt(document.getElementById('maxEmails').value) || 100;
+    config.daysBack = parseInt(document.getElementById('daysBack').value);
+    
+    // Obtener configuración de procesamiento automático
+    config.autoProcess = document.getElementById('autoProcess').checked;
+    config.processHour = parseInt(document.getElementById('processHour').value);
+    
+    // Validar valores
+    if (config.maxEmails < 10) config.maxEmails = 10;
+    if (config.maxEmails > 500) config.maxEmails = 500;
+    
+    showStatus('saveStatus', 'Guardando configuración...', 'info');
+    
+    google.script.run
+      .withSuccessHandler(function(result) {
+        if (result) {
+          let message = 'Configuración guardada correctamente';
+          if (config.autoProcess) {
+            message += '<br>Procesamiento automático programado para las ' + 
+                      config.processHour.toString().padStart(2, '0') + ':00 todos los días';
+          }
+          showStatus('saveStatus', message, 'success');
+          setTimeout(function() {
+            hideStatus('saveStatus');
+          }, 3000);
+        } else {
+          showStatus('saveStatus', 'Error al guardar la configuración', 'error');
+        }
+      })
+      .withFailureHandler(function(error) {
+        showStatus('saveStatus', 'Error: ' + error.message, 'error');
+      })
+      .saveConfig(config);
+  }
+  
+  // Procesar correos
+  function processEmails() {
+    showStatus('processStatus', '<div class="spinner"></div> Procesando correos...', 'info');
+    
+    document.getElementById('processButton').disabled = true;
+    
+    google.script.run
+      .withSuccessHandler(function(stats) {
+        document.getElementById('processButton').disabled = false;
+        
+        if (stats.error) {
+          showStatus('processStatus', 'Error: ' + stats.error, 'error');
+          return;
+        }
+        
+        let message = `Procesados: ${stats.processed} correos<br>`;
+        message += `Etiquetados: ${stats.labeled} correos<br>`;
+        
+        if (stats.errors > 0) {
+          message += `Errores: ${stats.errors}<br>`;
+        }
+        
+        if (Object.keys(stats.domains).length > 0) {
+          message += '<br>Dominios procesados:<br>';
+          for (const domain in stats.domains) {
+            message += `- ${domain}: ${stats.domains[domain]} correos<br>`;
+          }
+        }
+        
+        showStatus('processStatus', message, 'success');
+        
+        // Actualizar estadísticas después de procesar
+        loadStats();
+      })
+      .withFailureHandler(function(error) {
+        document.getElementById('processButton').disabled = false;
+        showStatus('processStatus', 'Error: ' + error.message, 'error');
+      })
+      .processEmails();
+  }
+  
+  // Exportar estadísticas a CSV
+  function exportStats() {
+    google.script.run
+      .withSuccessHandler(function(csvUrl) {
+        if (csvUrl) {
+          // Abrir el CSV en una nueva ventana
+          window.open(csvUrl, '_blank');
+        } else {
+          showStatus('statsStatus', 'Error al exportar estadísticas', 'error');
+        }
+      })
+      .withFailureHandler(function(error) {
+        showStatus('statsStatus', 'Error: ' + error.message, 'error');
+      })
+      .exportStatsToCSV();
+  }
+  
+  // Limpiar estadísticas
+  function clearStats() {
+    if (confirm('¿Estás seguro de que deseas eliminar todas las estadísticas? Esta acción no se puede deshacer.')) {
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result) {
+            showStatus('statsStatus', 'Estadísticas eliminadas correctamente', 'success');
+            
+            // Reiniciar los datos de estadísticas
+            statsData = {
+              totalProcessed: 0,
+              totalLabeled: 0,
+              domainStats: {},
+              lastRun: null
+            };
+            
+            // Actualizar la interfaz
+            updateStatsUI(statsData);
+            
+            setTimeout(function() {
+              hideStatus('statsStatus');
+            }, 3000);
+          } else {
+            showStatus('statsStatus', 'Error al eliminar estadísticas', 'error');
+          }
+        })
+        .withFailureHandler(function(error) {
+          showStatus('statsStatus', 'Error: ' + error.message, 'error');
+        })
+        .clearStats();
+    }
+  }
+  
+  // Mostrar mensaje de estado
+  function showStatus(elementId, message, type) {
+    const element = document.getElementById(elementId);
+    element.innerHTML = message;
+    element.className = 'status ' + type;
+    element.style.display = 'block';
+  }
+  
+  // Ocultar mensaje de estado
+  function hideStatus(elementId) {
+    const element = document.getElementById(elementId);
+    element.style.display = 'none';
+  }
+  
+  // Manejar errores
+  function handleError(error) {
+    console.error('Error:', error);
+    showStatus('processStatus', 'Error: ' + error.message, 'error');
+  }
+</script>

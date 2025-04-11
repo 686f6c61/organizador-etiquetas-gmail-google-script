@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <?!= HtmlService.createHtmlOutputFromFile('Styles').getContent(); ?>
+  </head>
+  <body>
+    <div class="section">
+      <h3>OEG - Organizador etiquetas Gmail</h3>
+      <p>Este script organiza automáticamente tus correos según el dominio del remitente.</p>
+    </div>
+    
+    <div class="section">
+      <h3>Ejecutar script</h3>
+      <button id="processButton" onclick="processEmails()">Procesar correos</button>
+      <div id="processStatus" class="status"></div>
+    </div>
+    
+    <div class="section">
+      <h3>Configuración</h3>
+      
+      <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+        <div>
+          <label for="maxEmails">Máximo de correos:</label><br>
+          <input type="number" id="maxEmails" min="10" max="500">
+        </div>
+        
+        <div>
+          <label for="daysBack">Días hacia atrás:</label><br>
+          <select id="daysBack">
+            <option value="-1">Todos</option>
+            <option value="1">1 día</option>
+            <option value="3">3 días</option>
+            <option value="7">7 días</option>
+            <option value="15">15 días</option>
+            <option value="30">30 días</option>
+          </select>
+        </div>
+      </div>
+      
+      <h4>Procesamiento automático</h4>
+      <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
+        <div>
+          <input type="checkbox" id="autoProcess" style="width: auto;">
+          <label for="autoProcess">Procesar diariamente</label>
+        </div>
+        
+        <div>
+          <label for="processHour">Hora del día:</label>
+          <select id="processHour" style="width: 60px;">
+            <option value="0">00:00</option>
+            <option value="1">01:00</option>
+            <option value="2">02:00</option>
+            <option value="3">03:00</option>
+            <option value="4">04:00</option>
+            <option value="5">05:00</option>
+            <option value="6">06:00</option>
+            <option value="7">07:00</option>
+            <option value="8">08:00</option>
+            <option value="9">09:00</option>
+            <option value="10">10:00</option>
+            <option value="11">11:00</option>
+            <option value="12">12:00</option>
+            <option value="13">13:00</option>
+            <option value="14">14:00</option>
+            <option value="15">15:00</option>
+            <option value="16">16:00</option>
+            <option value="17">17:00</option>
+            <option value="18">18:00</option>
+            <option value="19">19:00</option>
+            <option value="20">20:00</option>
+            <option value="21">21:00</option>
+            <option value="22">22:00</option>
+            <option value="23">23:00</option>
+          </select>
+        </div>
+      </div>
+      
+      <h4>Dominios genéricos</h4>
+      <p>Los correos de estos dominios se agruparán bajo la etiqueta "generico"</p>
+      
+      <div style="display: flex; align-items: center; gap: 5px;">
+        <input type="text" id="newDomain" placeholder="Añadir dominio..." style="flex-grow: 1;">
+        <button id="addDomainButton" onclick="addDomain()">Añadir</button>
+      </div>
+      
+      <div class="tag-container" id="domainTags"></div>
+    </div>
+    
+    <div class="section">
+      <button id="saveButton" onclick="saveConfig()">Guardar configuración</button>
+      <div id="saveStatus" class="status"></div>
+    </div>
+    
+    <div class="section">
+      <h3>Estadísticas</h3>
+      
+      <div class="stats-container">
+        <div class="stats-card">
+          <div class="stats-title">Total procesados</div>
+          <div class="stats-value" id="totalProcessed">0</div>
+          <div class="stats-label">correos</div>
+        </div>
+        
+        <div class="stats-card">
+          <div class="stats-title">Total etiquetados</div>
+          <div class="stats-value" id="totalLabeled">0</div>
+          <div class="stats-label">correos</div>
+        </div>
+        
+        <div class="stats-card">
+          <div class="stats-title">Última ejecución</div>
+          <div class="stats-value" id="lastRun">Nunca</div>
+        </div>
+      </div>
+      
+      <h4>Gráfico de dominios</h4>
+      <div id="chartContainer" class="chart-container">
+        <p>No hay datos suficientes para mostrar un gráfico</p>
+      </div>
+      
+      <h4>Top dominios</h4>
+      <div id="domainStats" class="stats-container">
+        <p>No hay estadísticas disponibles</p>
+      </div>
+      
+      <div style="display: flex; gap: 5px; margin-top: 8px;">
+        <button onclick="exportStats()">Exportar</button>
+        <button onclick="clearStats()" style="background-color: #f44336;">Limpiar</button>
+      </div>
+      <div id="statsStatus" class="status"></div>
+    </div>
+    
+    <?!= HtmlService.createHtmlOutputFromFile('Script').getContent(); ?>
+  </body>
+</html>
