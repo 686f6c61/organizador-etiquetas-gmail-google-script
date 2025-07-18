@@ -68,7 +68,6 @@
     document.getElementById('avoidSubdomains').checked = config.avoidSubdomains;
     
     updateDomainTags();
-    updateSubdomainTags();
     hideStatus('processStatus');
   }
   
@@ -230,43 +229,6 @@
   function removeDomain(domain) {
     config.genericDomains = config.genericDomains.filter(d => d !== domain);
     updateDomainTags();
-  }
-
-  /**
-   * @description Actualiza la visualización de las etiquetas de subdominios a evitar.
-   */
-  function updateSubdomainTags() {
-    const container = document.getElementById('subdomainTags');
-    container.innerHTML = '';
-    
-    config.subdomainsToAvoid.forEach(function(subdomain) {
-      const tag = document.createElement('div');
-      tag.className = 'tag';
-      tag.innerHTML = subdomain + '<span class="tag-delete" onclick="removeSubdomain(' + subdomain + ')">&times;</span>';      container.appendChild(tag);
-    });
-  }
-
-  /**
-   * @description Añade un nuevo subdominio a la lista de subdominios a evitar.
-   */
-  function addSubdomain() {
-    const input = document.getElementById('newSubdomain');
-    const subdomain = input.value.trim().toLowerCase();
-    
-    if (subdomain && !config.subdomainsToAvoid.includes(subdomain)) {
-      config.subdomainsToAvoid.push(subdomain);
-      updateSubdomainTags();
-      input.value = '';
-    }
-  }
-
-  /**
-   * @description Elimina un subdominio de la lista de subdominios a evitar.
-   * @param {String} subdomain - El subdominio a eliminar.
-   */
-  function removeSubdomain(subdomain) {
-    config.subdomainsToAvoid = config.subdomainsToAvoid.filter(s => s !== subdomain);
-    updateSubdomainTags();
   }
   
   // --- Funciones de Acción del Usuario ---

@@ -26,7 +26,6 @@ const PROP_DAYS_BACK = 'daysBack';
 const PROP_AUTO_PROCESS = 'autoProcess';
 const PROP_PROCESS_HOUR = 'processHour';
 const PROP_AVOID_SUBDOMAINS = 'avoidSubdomains';
-const PROP_SUBDOMAINS_TO_AVOID = 'subdomainsToAvoid';
 
 
 /**
@@ -119,11 +118,6 @@ function initProperties() {
   if (!properties.getProperty(PROP_AVOID_SUBDOMAINS)) {
     properties.setProperty(PROP_AVOID_SUBDOMAINS, 'false');
   }
-
-  if (!properties.getProperty(PROP_SUBDOMAINS_TO_AVOID)) {
-    const defaultSubdomainsToAvoid = ['e', 'email', 'mail', 'info', 'news', 'newsletter', 'team', 'hello'];
-    properties.setProperty(PROP_SUBDOMAINS_TO_AVOID, JSON.stringify(defaultSubdomainsToAvoid));
-  }
 }
 
 /**
@@ -141,8 +135,7 @@ function getConfig() {
     daysBack: parseInt(properties.getProperty(PROP_DAYS_BACK)),
     autoProcess: properties.getProperty(PROP_AUTO_PROCESS) === 'true',
     processHour: parseInt(properties.getProperty(PROP_PROCESS_HOUR)),
-    avoidSubdomains: properties.getProperty(PROP_AVOID_SUBDOMAINS) === 'true',
-    subdomainsToAvoid: JSON.parse(properties.getProperty(PROP_SUBDOMAINS_TO_AVOID))
+    avoidSubdomains: properties.getProperty(PROP_AVOID_SUBDOMAINS) === 'true'
   };
 }
 
@@ -162,7 +155,6 @@ function saveConfig(config) {
     properties.setProperty(PROP_AUTO_PROCESS, config.autoProcess.toString());
     properties.setProperty(PROP_PROCESS_HOUR, config.processHour.toString());
     properties.setProperty(PROP_AVOID_SUBDOMAINS, config.avoidSubdomains.toString());
-    properties.setProperty(PROP_SUBDOMAINS_TO_AVOID, JSON.stringify(config.subdomainsToAvoid));
     
     // Configurar o eliminar el disparador según la configuración
     updateTrigger(config.autoProcess, config.processHour);
@@ -195,10 +187,9 @@ function extractDomain(email) {
  * @param {String} domain - El dominio del correo.
  * @param {Array<String>} genericDomains - Lista de dominios a considerar como "generico".
  * @param {Boolean} avoidSubdomains - `true` para activar la lógica de eliminación de subdominios.
- * @param {Array<String>} subdomainsToAvoid - Lista de subdominios a ignorar.
  * @returns {String|null} El nombre de la etiqueta, o `null` si no se debe etiquetar.
  */
-function getLabelName(domain, genericDomains, avoidSubdomains, subdomainsToAvoid) {
+function getLabelName(domain, genericDomains, avoidSubdomains) {
   if (!domain) return null;
 
   // Si el dominio está en la lista de genéricos, usar etiqueta "generico"
@@ -208,13 +199,10 @@ function getLabelName(domain, genericDomains, avoidSubdomains, subdomainsToAvoid
 
   let domainParts = domain.split('.');
 
-  // Si se deben evitar subdominios y el dominio tiene más de 2 partes (ej. sub.dominio.com)
+  // Si la opción está activada y el dominio tiene más de 2 partes (es un subdominio)
   if (avoidSubdomains && domainParts.length > 2) {
-    // Si la primera parte (subdominio) está en la lista de subdominios a evitar
-    if (subdomainsToAvoid.includes(domainParts[0])) {
-      // Eliminar la primera parte (subdominio)
-      domainParts.shift();
-    }
+    // Tomar solo las dos últimas partes (ej. 'google.com' de 'news.google.com')
+    domainParts = domainParts.slice(-2);
   }
 
   // Extraer la parte principal del dominio (antes del primer punto)
@@ -326,7 +314,7 @@ function processEmails() {
             const domain = extractDomain(from);
             
             if (domain) {
-              const labelName = getLabelName(domain, config.genericDomains, config.avoidSubdomains, config.subdomainsToAvoid);
+              const labelName = getLabelName(domain, config.genericDomains, config.avoidSubdomains);
               
               if (labelName) {
                 const label = getOrCreateLabel(labelName);

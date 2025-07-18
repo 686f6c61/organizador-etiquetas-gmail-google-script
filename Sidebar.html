@@ -94,15 +94,9 @@
         <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
             <div>
                 <input type="checkbox" id="avoidSubdomains" style="width: auto;">
-                <label for="avoidSubdomains">Evitar subdominios</label>
+                <label for="avoidSubdomains">Ignorar todos los subdominios (ej. 'news.google.com' será 'google')</label>
             </div>
         </div>
-        <p>Los subdominios de esta lista se ignorarán (ej. 'e.dominio.com' será 'dominio')</p>
-        <div style="display: flex; align-items: center; gap: 5px;">
-            <input type="text" id="newSubdomain" placeholder="Añadir subdominio..." style="flex-grow: 1;">
-            <button id="addSubdomainButton" onclick="addSubdomain()">Añadir</button>
-        </div>
-        <div class="tag-container" id="subdomainTags"></div>
       
       <!-- Configuración de Dominios Genéricos -->
       <h4>Dominios genéricos</h4>
