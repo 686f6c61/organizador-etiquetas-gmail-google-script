@@ -1,19 +1,18 @@
 /**
- * OEG - Organizador etiquetas Gmail
- * Módulo de estadísticas
- * 
- * Este archivo contiene las funciones relacionadas con el manejo de estadísticas
+ * @file Statistics.gs
+ * @description Módulo para la gestión de estadísticas de procesamiento de correos.
+ *              Incluye funciones para obtener, actualizar, limpiar y exportar estadísticas.
  */
 
-// Propiedades para estadísticas
+// --- Constantes Globales de Propiedades de Estadísticas ---
 const PROP_TOTAL_PROCESSED = 'totalProcessed';
 const PROP_TOTAL_LABELED = 'totalLabeled';
 const PROP_DOMAIN_STATS = 'domainStats';
 const PROP_LAST_RUN = 'lastRun';
 
 /**
- * Obtiene las estadísticas actuales
- * @return {Object} Objeto con las estadísticas
+ * @description Obtiene las estadísticas acumuladas desde `PropertiesService`.
+ * @returns {Object} Un objeto con las estadísticas (total procesado, total etiquetado, etc.).
  */
 function getStats() {
   const properties = PropertiesService.getUserProperties();
@@ -43,9 +42,9 @@ function getStats() {
 }
 
 /**
- * Actualiza las estadísticas con los resultados del procesamiento
- * @param {Object} stats - Estadísticas del procesamiento actual
- * @return {Boolean} - Resultado de la operación
+ * @description Actualiza las estadísticas acumuladas con los resultados de un nuevo procesamiento.
+ * @param {Object} stats - Estadísticas del procesamiento más reciente.
+ * @returns {Boolean} `true` si la actualización fue exitosa, `false` en caso de error.
  */
 function updateStats(stats) {
   try {
@@ -83,8 +82,8 @@ function updateStats(stats) {
 }
 
 /**
- * Limpia todas las estadísticas
- * @return {Boolean} - Resultado de la operación
+ * @description Elimina todas las estadísticas guardadas de `PropertiesService`.
+ * @returns {Boolean} `true` si la limpieza fue exitosa, `false` en caso de error.
  */
 function clearStats() {
   try {
@@ -103,8 +102,8 @@ function clearStats() {
 }
 
 /**
- * Exporta las estadísticas a un archivo CSV
- * @return {String} - URL del archivo CSV creado
+ * @description Exporta las estadísticas de dominios a un archivo CSV en Google Drive.
+ * @returns {String|null} La URL pública del archivo CSV creado, o `null` en caso de error.
  */
 function exportStatsToCSV() {
   try {

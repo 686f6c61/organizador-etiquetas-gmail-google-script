@@ -1,16 +1,15 @@
 /**
- * OEG - Organizador etiquetas Gmail
- * Script que organiza automáticamente los correos de Gmail según el dominio del remitente
- * 
+ * @file Code.gs
+ * @description Contiene la lógica principal del script para organizar etiquetas de Gmail.
  * @author Cascade
- * @version 0.2
- * @date 2025-04-11
+ * @version 0.3
+ * @date 2025-07-18
  */
 
 /**
- * Función que se ejecuta cuando se accede al script como aplicación web
- * @param {Object} e - Objeto de evento
- * @return {HtmlOutput} - Interfaz de usuario
+ * @description Se ejecuta cuando el script se accede como una aplicación web. Sirve la interfaz de usuario principal.
+ * @param {Object} e - Objeto de evento de Google Apps Script.
+ * @returns {HtmlOutput} La interfaz de usuario renderizada desde 'Sidebar.html'.
  */
 function doGet(e) {
   return HtmlService.createTemplateFromFile('Sidebar')
@@ -19,16 +18,20 @@ function doGet(e) {
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
-// Propiedades globales para almacenar configuración
+// --- Constantes Globales de Propiedades ---
+// Almacenan los nombres de las claves para `PropertiesService` para evitar errores de tipeo.
 const PROP_GENERIC_DOMAINS = 'genericDomains';
 const PROP_MAX_EMAILS = 'maxEmails';
 const PROP_DAYS_BACK = 'daysBack';
 const PROP_AUTO_PROCESS = 'autoProcess';
 const PROP_PROCESS_HOUR = 'processHour';
+const PROP_AVOID_SUBDOMAINS = 'avoidSubdomains';
+const PROP_SUBDOMAINS_TO_AVOID = 'subdomainsToAvoid';
+
 
 /**
- * Función que se ejecuta al abrir el script desde Google Apps Script
- * Crea el menú en la interfaz de Gmail
+ * @description Se ejecuta cuando un usuario abre un documento que contiene este script.
+ *              Crea un menú personalizado en la UI de Google Sheets o Gmail para acceder al panel de control.
  */
 function onOpen() {
   try {
@@ -50,7 +53,8 @@ function onOpen() {
 }
 
 /**
- * Muestra el panel lateral con la interfaz de usuario
+ * @description Muestra el panel lateral (sidebar) con la interfaz de usuario principal.
+ *              Es compatible tanto con Google Sheets como con Gmail.
  */
 function showSidebar() {
   const html = HtmlService.createHtmlOutputFromFile('Sidebar')
@@ -69,7 +73,8 @@ function showSidebar() {
 }
 
 /**
- * Inicializa las propiedades del script si no existen
+ * @description Inicializa las propiedades del script con valores por defecto si no existen.
+ *              Esto asegura que el script tenga una configuración base para funcionar correctamente.
  */
 function initProperties() {
   const properties = PropertiesService.getUserProperties();
@@ -110,11 +115,21 @@ function initProperties() {
   if (!properties.getProperty(PROP_PROCESS_HOUR)) {
     properties.setProperty(PROP_PROCESS_HOUR, '8');
   }
+
+  if (!properties.getProperty(PROP_AVOID_SUBDOMAINS)) {
+    properties.setProperty(PROP_AVOID_SUBDOMAINS, 'false');
+  }
+
+  if (!properties.getProperty(PROP_SUBDOMAINS_TO_AVOID)) {
+    const defaultSubdomainsToAvoid = ['e', 'email', 'mail', 'info', 'news', 'newsletter', 'team', 'hello'];
+    properties.setProperty(PROP_SUBDOMAINS_TO_AVOID, JSON.stringify(defaultSubdomainsToAvoid));
+  }
 }
 
 /**
- * Obtiene la configuración actual
- * @return {Object} Objeto con la configuración
+ * @description Obtiene la configuración actual del script desde `PropertiesService`.
+ *              Si no hay propiedades guardadas, las inicializa primero.
+ * @returns {Object} Un objeto con toda la configuración del script.
  */
 function getConfig() {
   initProperties();
@@ -125,14 +140,17 @@ function getConfig() {
     maxEmails: parseInt(properties.getProperty(PROP_MAX_EMAILS)),
     daysBack: parseInt(properties.getProperty(PROP_DAYS_BACK)),
     autoProcess: properties.getProperty(PROP_AUTO_PROCESS) === 'true',
-    processHour: parseInt(properties.getProperty(PROP_PROCESS_HOUR))
+    processHour: parseInt(properties.getProperty(PROP_PROCESS_HOUR)),
+    avoidSubdomains: properties.getProperty(PROP_AVOID_SUBDOMAINS) === 'true',
+    subdomainsToAvoid: JSON.parse(properties.getProperty(PROP_SUBDOMAINS_TO_AVOID))
   };
 }
 
 /**
- * Guarda la configuración
- * @param {Object} config - Objeto con la configuración
- * @return {Boolean} - Resultado de la operación
+ * @description Guarda la configuración proporcionada en `PropertiesService`.
+ *              También actualiza el trigger para el procesamiento automático.
+ * @param {Object} config - Objeto con la configuración a guardar.
+ * @returns {Boolean} `true` si se guardó correctamente, `false` en caso de error.
  */
 function saveConfig(config) {
   try {
@@ -143,6 +161,8 @@ function saveConfig(config) {
     properties.setProperty(PROP_DAYS_BACK, config.daysBack.toString());
     properties.setProperty(PROP_AUTO_PROCESS, config.autoProcess.toString());
     properties.setProperty(PROP_PROCESS_HOUR, config.processHour.toString());
+    properties.setProperty(PROP_AVOID_SUBDOMAINS, config.avoidSubdomains.toString());
+    properties.setProperty(PROP_SUBDOMAINS_TO_AVOID, JSON.stringify(config.subdomainsToAvoid));
     
     // Configurar o eliminar el disparador según la configuración
     updateTrigger(config.autoProcess, config.processHour);
@@ -155,9 +175,9 @@ function saveConfig(config) {
 }
 
 /**
- * Extrae el dominio de una dirección de correo electrónico
- * @param {String} email - Dirección de correo electrónico
- * @return {String} - Dominio extraído
+ * @description Extrae el dominio de una dirección de correo electrónico.
+ * @param {String} email - La dirección de correo electrónico (ej. "nombre <usuario@dominio.com>").
+ * @returns {String} El dominio en minúsculas, o una cadena vacía si no se encuentra.
  */
 function extractDomain(email) {
   if (!email) return '';
@@ -170,28 +190,42 @@ function extractDomain(email) {
 }
 
 /**
- * Obtiene el nombre de la etiqueta a partir del dominio
- * @param {String} domain - Dominio del correo
- * @param {Array} genericDomains - Lista de dominios genéricos
- * @return {String} - Nombre de la etiqueta
+ * @description Determina el nombre de la etiqueta de Gmail a partir de un dominio.
+ *              Aplica la lógica para dominios genéricos y para evitar subdominios.
+ * @param {String} domain - El dominio del correo.
+ * @param {Array<String>} genericDomains - Lista de dominios a considerar como "generico".
+ * @param {Boolean} avoidSubdomains - `true` para activar la lógica de eliminación de subdominios.
+ * @param {Array<String>} subdomainsToAvoid - Lista de subdominios a ignorar.
+ * @returns {String|null} El nombre de la etiqueta, o `null` si no se debe etiquetar.
  */
-function getLabelName(domain, genericDomains) {
+function getLabelName(domain, genericDomains, avoidSubdomains, subdomainsToAvoid) {
   if (!domain) return null;
-  
+
   // Si el dominio está en la lista de genéricos, usar etiqueta "generico"
   if (genericDomains.includes(domain)) {
     return 'generico';
   }
-  
+
+  let domainParts = domain.split('.');
+
+  // Si se deben evitar subdominios y el dominio tiene más de 2 partes (ej. sub.dominio.com)
+  if (avoidSubdomains && domainParts.length > 2) {
+    // Si la primera parte (subdominio) está en la lista de subdominios a evitar
+    if (subdomainsToAvoid.includes(domainParts[0])) {
+      // Eliminar la primera parte (subdominio)
+      domainParts.shift();
+    }
+  }
+
   // Extraer la parte principal del dominio (antes del primer punto)
-  const mainDomain = domain.split('.')[0];
+  const mainDomain = domainParts[0];
   return mainDomain;
 }
 
 /**
- * Obtiene o crea una etiqueta en Gmail
- * @param {String} labelName - Nombre de la etiqueta
- * @return {GmailLabel} - Objeto etiqueta de Gmail
+ * @description Obtiene una etiqueta de Gmail existente o la crea si no existe.
+ * @param {String} labelName - El nombre de la etiqueta a obtener o crear.
+ * @returns {GmailLabel|null} El objeto de la etiqueta de Gmail, o `null` en caso de error.
  */
 function getOrCreateLabel(labelName) {
   if (!labelName) return null;
@@ -213,9 +247,9 @@ function getOrCreateLabel(labelName) {
 }
 
 /**
- * Actualiza el disparador para el procesamiento automático
- * @param {Boolean} enabled - Si el procesamiento automático está habilitado
- * @param {Number} hour - Hora del día para ejecutar (0-23)
+ * @description Crea, actualiza o elimina el disparador (trigger) para el procesamiento automático diario.
+ * @param {Boolean} enabled - `true` para crear o mantener el disparador, `false` para eliminarlo.
+ * @param {Number} hour - La hora del día (0-23) en la que se debe ejecutar el disparador.
  */
 function updateTrigger(enabled, hour) {
   try {
@@ -244,8 +278,11 @@ function updateTrigger(enabled, hour) {
 }
 
 /**
- * Procesa los correos y aplica las etiquetas según el dominio
- * @return {Object} - Estadísticas del procesamiento
+ * @description Función principal que procesa los correos de Gmail.
+ *              Busca correos según la configuración, extrae el dominio del remitente,
+ *              determina el nombre de la etiqueta y la aplica al hilo de correo.
+ *              También recopila estadísticas sobre el proceso.
+ * @returns {Object} Un objeto con las estadísticas del procesamiento, o un objeto de error.
  */
 function processEmails() {
   try {
@@ -289,7 +326,7 @@ function processEmails() {
             const domain = extractDomain(from);
             
             if (domain) {
-              const labelName = getLabelName(domain, genericDomains);
+              const labelName = getLabelName(domain, config.genericDomains, config.avoidSubdomains, config.subdomainsToAvoid);
               
               if (labelName) {
                 const label = getOrCreateLabel(labelName);

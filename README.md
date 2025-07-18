@@ -1,4 +1,4 @@
-# OEG - Organizador etiquetas Gmail (V.0.2)
+# OEG - Organizador de Etiquetas para Gmail (V.0.3)
 
 <div align="center">
   <img src="https://img.shields.io/badge/Google%20Apps%20Script-4285F4?style=for-the-badge&logo=google&logoColor=white" alt="Google Apps Script" />
@@ -8,120 +8,131 @@
   <img src="https://img.shields.io/badge/CSS3-1572B6?style=for-the-badge&logo=css3&logoColor=white" alt="CSS3" />
 </div>
 
+**OEG** es un potente script de Google Apps Script diseñado para organizar automáticamente tu bandeja de entrada de Gmail mediante la creación y asignación de etiquetas basadas en el dominio del remitente. Simplifica la gestión de correos, mejora la visibilidad y te permite tener un control total sobre cómo se clasifican tus mensajes.
+
+![Interfaz principal del Configurador](img/configurador.png)
+
+## Índice
+
+- [Descripción](#descripción)
+- [Características Principales](#características-principales)
+- [Instalación](#instalación)
+- [Uso](#uso)
+- [Configuración Detallada](#configuración-detallada)
+- [Estadísticas y Visualización](#estadísticas-y-visualización)
+- [Arquitectura Técnica](#arquitectura-técnica)
+- [Permisos Requeridos](#permisos-requeridos)
+- [Limitaciones](#limitaciones)
+- [Solución de Problemas](#solución-de-problemas)
+- [Cómo Contribuir](#cómo-contribuir)
+
 ## Descripción
-Este script de Google Apps Script organiza automáticamente los correos de Gmail según el dominio del remitente. Crea etiquetas basadas en el nombre del dominio y agrupa los correos de dominios genéricos (como gmail.com, outlook.com, etc.) bajo una etiqueta común.
 
-![Interfaz principal](img/configurador.png)
+Este script analiza los correos electrónicos leídos en tu bandeja de entrada, extrae el dominio del remitente y crea una etiqueta con el nombre de ese dominio (por ejemplo, `github`, `amazon`, `google`). Además, agrupa los correos de proveedores de correo comunes (como `gmail.com`, `outlook.com`) bajo una única etiqueta `generico` para mantener tu lista de etiquetas limpia y organizada.
 
-## Características
+La característica más avanzada es su capacidad para **ignorar subdominios específicos** (como `e.`, `info.`, `news.`), permitiendo agrupar correos de `info@e.atlassian.com` y `Jira@atlassian.com` bajo la misma etiqueta `atlassian`.
 
-### Funcionalidades principales
-- Procesamiento automático de correos leídos
-- Creación automática de etiquetas basadas en dominios
-- Agrupación de dominios genéricos bajo una etiqueta común "generico"
-- Interfaz de usuario moderna y compacta
-- Control de cuántos correos procesar (configurable)
+## Características Principales
 
-### Características avanzadas
-- **Procesamiento automático diario**: Programa la ejecución automática a una hora específica cada día
-- **Opción "Todos" para días hacia atrás**: Permite procesar todos los correos sin limitación de fecha
-- **Visualización de estadísticas**: Muestra contadores de correos procesados y etiquetados
-- **Gráfico de dominios**: Visualización gráfica de los dominios más frecuentes
-- **Exportación de estadísticas**: Permite exportar los datos a CSV
-- **Gestión de dominios genéricos**: Interfaz para añadir o eliminar dominios de la lista
-
-### Dominios genéricos preconfigurados
-El script viene con una lista predefinida de dominios genéricos que se agruparán bajo la etiqueta "generico":
-- gmail.com, outlook.com, yahoo.com, hotmail.com, icloud.com
-- protonmail.com, mail.com, zoho.com, yandex.com
-- gmx.com, live.com, msn.com, me.com, mac.com, aol.com
+- **Organización Automática**: Procesa correos leídos y les asigna etiquetas basadas en el dominio del remitente.
+- **Creación de Etiquetas Inteligente**: Genera nuevas etiquetas si no existen.
+- **Agrupación de Dominios Genéricos**: Mantiene tu espacio de trabajo limpio agrupando correos de dominios como `gmail.com` o `yahoo.com` en una sola etiqueta: `generico`.
+- **Control de Subdominios**: Permite ignorar subdominios personalizables (ej. `e`, `mail`, `info`) para una clasificación más precisa.
+- **Procesamiento Programado**: Configura el script para que se ejecute automáticamente cada día a la hora que elijas.
+- **Panel de Control Interactivo**: Una interfaz de usuario intuitiva integrada en Gmail para configurar y ejecutar el script.
+- **Panel de Estadísticas**: Visualiza datos sobre los correos procesados, las etiquetas creadas y los dominios más frecuentes a través de gráficos y contadores.
+- **Exportación de Datos**: Exporta las estadísticas de dominios a un archivo CSV compatible con Google Sheets.
 
 ## Instalación
 
-### Método 1: Crear un nuevo proyecto
-1. Accede a [Google Apps Script](https://script.google.com/)
-2. Crea un nuevo proyecto
-3. Copia y pega el contenido de los archivos `Code.gs` y `Sidebar.html` en tu proyecto
-4. Guarda el proyecto con el nombre "OEG - Organizador etiquetas Gmail"
-5. Ejecuta la función `onOpen` para inicializar el script
+Para instalar OEG, sigue estos pasos:
 
-### Método 2: Desplegar desde este repositorio
-1. Clona este repositorio
-2. Utiliza [clasp](https://developers.google.com/apps-script/guides/clasp) para desplegar el script en tu cuenta de Google
+1.  **Accede a Google Apps Script**: Ve a [script.google.com](https://script.google.com/) y haz clic en **Nuevo proyecto**.
+2.  **Copia el Código**:
+    -   Elimina el contenido del archivo `Código.gs` por defecto.
+    -   Copia todo el contenido de [Code.gs](./Code.gs) y [Statistics.gs](./Statistics.gs) y pégalo en el editor de `Código.gs`.
+3.  **Crea los Archivos HTML**:
+    -   En el editor, haz clic en `+` > **HTML** para crear los siguientes archivos (asegúrate de que los nombres coincidan exactamente):
+        -   `Sidebar.html`
+        -   `Script.html`
+        -   `Styles.html`
+    -   Copia el contenido de los archivos correspondientes de este repositorio en cada uno de los archivos que has creado.
+4.  **Guarda el Proyecto**: Haz clic en el icono de guardar 💾 y dale un nombre descriptivo, como "OEG - Organizador Gmail".
+5.  **Ejecuta la Inicialización**:
+    -   Selecciona la función `onOpen` en el menú desplegable de funciones.
+    -   Haz clic en **Ejecutar**.
+    -   Se te pedirá que autorices los permisos necesarios. Revisa y acepta para continuar.
+
+Una vez completado, el script estará activo en tu cuenta.
 
 ## Uso
 
-### Como aplicación web
-1. Despliega el script como aplicación web desde el editor de Google Apps Script
-2. Accede a la URL generada para abrir la interfaz
-3. Configura las opciones y haz clic en "Procesar correos"
+1.  **Abre Gmail**: Ve a [gmail.com](https://gmail.com).
+2.  **Accede al Panel de Control**:
+    -   Busca el nuevo menú **OEG** en la barra de menú superior de Gmail.
+    -   Haz clic en `OEG` > `Abrir panel de control`.
+3.  **Utiliza la Interfaz**:
+    -   El panel de control aparecerá en la barra lateral derecha.
+    -   Desde aquí, puedes ejecutar el script manualmente, ajustar la configuración y ver las estadísticas.
 
-### Como complemento de Gmail
-1. Una vez instalado, abre Gmail
-2. Verás un nuevo menú llamado "OEG" en la barra superior
-3. Haz clic en "OEG" > "Abrir panel de control"
-4. En el panel lateral podrás:
-   - Ejecutar el procesamiento de correos
-   - Ver estadísticas de uso
-   - Configurar todas las opciones
+## Configuración Detallada
 
-## Configuración
+### Opciones de Procesamiento
+-   **Máximo de correos a procesar**: Define el número de hilos de correo que se analizarán en cada ejecución (rango: 10-500).
+-   **Días hacia atrás**: Limita el análisis a un período de tiempo específico (1, 3, 7, 15, 30 días) o selecciona `Todos` para un análisis completo.
 
-### Opciones principales
-- **Máximo de correos a procesar**: Limita cuántos correos se procesarán en cada ejecución (10-500)
-- **Días hacia atrás**: 
-  - Define el período de tiempo a revisar (1, 3, 7, 15 o 30 días)
-  - Opción "Todos" para procesar sin límite de fecha
-- **Procesamiento automático**:
-  - Opción para activar el procesamiento diario automático
-  - Selector de hora del día para la ejecución (formato 24h)
+### Procesamiento Automático
+-   **Activar/Desactivar**: Marca la casilla para que el script se ejecute automáticamente todos los días.
+-   **Hora de ejecución**: Selecciona la hora del día (formato 24h) para el procesamiento automático.
 
-### Gestión de dominios genéricos
-- Añadir nuevos dominios a la lista
-- Eliminar dominios existentes
-- Visualizar todos los dominios configurados
+### Gestión de Dominios
+-   **Evitar Subdominios**: Activa esta opción para que el script ignore los subdominios definidos en la lista (ej. `e.atlassian.com` se convierte en `atlassian.com`).
+    -   Puedes añadir o eliminar subdominios de la lista de ignorados.
+-   **Dominios Genéricos**: Administra la lista de dominios que se agruparán bajo la etiqueta `generico`.
 
-### Estadísticas
-- **Total procesados**: Número total de correos procesados
-- **Total etiquetados**: Número de correos que han recibido etiquetas
-- **Última ejecución**: Fecha y hora de la última vez que se ejecutó el script
-- **Gráfico de dominios**: Visualización de los dominios más frecuentes
-- **Exportación**: Posibilidad de exportar estadísticas a CSV
+## Estadísticas y Visualización
 
-![Panel de estadísticas](img/estadisticas.png)
+El panel de estadísticas ofrece una visión clara del trabajo que OEG está haciendo por ti.
 
-## Permisos
-El script requiere los siguientes permisos:
-- Leer y modificar tu correo de Gmail
-- Ejecutar como tú
-- Mostrar una interfaz de usuario personalizada
+-   **Contadores**: `Total procesados`, `Total etiquetados` y `Última ejecución`.
+-   **Gráfico de Dominios**: Un gráfico de barras que muestra los 5 dominios más frecuentes.
+-   **Top Dominios**: Una lista detallada de los dominios con más correos.
+-   **Acciones**:
+    -   **Abrir en Spreadsheet**: Exporta los datos de dominios a un archivo CSV en tu Google Drive.
+    -   **Limpiar**: Reinicia todas las estadísticas a cero.
+
+![Panel de Estadísticas](img/estadisticas.png)
+
+## Arquitectura Técnica
+
+-   **`Code.gs`**: Contiene la lógica principal del backend, incluyendo el procesamiento de correos, la gestión de etiquetas y la configuración.
+-   **`Statistics.gs`**: Módulo dedicado a la manipulación de datos estadísticos (obtener, actualizar, limpiar, exportar).
+-   **`Sidebar.html`**: Define la estructura HTML de la interfaz de usuario.
+-   **`Script.html`**: Alberga el código JavaScript del lado del cliente que gestiona la interactividad del panel.
+-   **`Styles.html`**: Contiene los estilos CSS para dar formato a la interfaz.
+
+El script utiliza `PropertiesService` de Google Apps Script para almacenar de forma persistente la configuración del usuario y las estadísticas.
+
+## Permisos Requeridos
+
+Para funcionar correctamente, el script necesita los siguientes permisos de tu cuenta de Google:
+-   **Leer y modificar tu correo de Gmail**: Para analizar los mensajes y aplicar etiquetas.
+-   **Ejecutar como tú**: Para que los triggers automáticos funcionen.
+-   **Mostrar una interfaz de usuario personalizada**: Para renderizar el panel de control en Gmail.
+-   **Crear y gestionar archivos en Google Drive**: Para la funcionalidad de exportación a CSV.
 
 ## Limitaciones
-- El script solo procesa correos leídos
-- Existe un límite de cuota diaria de Google Apps Script (consulta la [documentación oficial](https://developers.google.com/apps-script/guides/services/quotas))
-- El script no procesa correos sin un remitente válido
-- La opción "Todos" para días hacia atrás puede consumir más cuota si hay muchos correos
 
-## Arquitectura técnica
+-   El script solo procesa correos que ya han sido **leídos**.
+-   Está sujeto a las [cuotas y limitaciones de Google Apps Script](https://developers.google.com/apps-script/guides/services/quotas). Un uso intensivo en cuentas con un volumen de correo muy alto podría alcanzar estos límites.
+-   El procesamiento inicial en una bandeja de entrada muy grande puede tardar varios minutos.
 
-### Estructura de archivos
-- **Code.gs**: Lógica principal del script y funciones de procesamiento
-- **Statistics.gs**: Módulo para gestión de estadísticas
-- **Sidebar.html**: Estructura de la interfaz de usuario
-- **Styles.html**: Estilos CSS para la interfaz
-- **Script.html**: Código JavaScript para la interfaz
+## Solución de Problemas
 
-### Tecnologías utilizadas
-- Google Apps Script
-- Gmail API
-- HTML/CSS para la interfaz de usuario
-- JavaScript para la lógica del cliente
-- Almacenamiento de propiedades de usuario para configuración y estadísticas
+-   **El menú "OEG" no aparece en Gmail**: Refresca la página de Gmail. Si persiste, asegúrate de haber ejecutado la función `onOpen` correctamente durante la instalación.
+-   **El script falla durante la ejecución**: Revisa los registros de ejecución en el editor de Google Apps Script (`Ver` > `Ejecuciones`) para identificar el error.
+-   **Problemas de permisos**: Si encuentras errores de autorización, intenta ejecutar de nuevo la función `onOpen` para volver a lanzar el diálogo de permisos.
 
-## Solución de problemas
-- Si el menú "OEG" no aparece, actualiza la página o cierra y vuelve a abrir Gmail
-- Si el script falla, verifica que tienes los permisos necesarios
-- Para problemas persistentes, revisa los registros de ejecución en el editor de Google Apps Script
+## Cómo Contribuir
 
-## Contribuir
-Siéntete libre de contribuir a este proyecto mediante pull requests o reportando problemas.
+Las contribuciones son bienvenidas. Si tienes ideas para nuevas funcionalidades, mejoras o has encontrado un error, por favor, abre un *issue* o envía un *pull request*.
