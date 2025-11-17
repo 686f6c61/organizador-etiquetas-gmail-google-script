@@ -1,0 +1,244 @@
+<!--
+ * @file Sidebar.html
+ * @description Estructura HTML moderna del panel lateral con diseño Material Design
+ * @author 686f6c61
+ * @version 0.4
+ * @date 2025-11-17
+-->
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <?!= HtmlService.createHtmlOutputFromFile('Styles').getContent(); ?>
+  </head>
+  <body>
+    <!-- Header con gradiente -->
+    <div class="app-header">
+      <h3>OEG - Organizador de etiquetas Gmail</h3>
+      <p>v0.4 - Organiza automáticamente tus correos por dominio</p>
+    </div>
+
+    <!-- Sección de ejecución manual -->
+    <div class="section">
+      <div class="section-header">
+        <h3>▶ Ejecutar script</h3>
+      </div>
+      <p style="margin-top: 0; color: #5f6368; font-size: 13px;">
+        Procesa tus correos leídos y asigna etiquetas basadas en el dominio del remitente.
+      </p>
+      <button id="processButton" onclick="processEmails()">Procesar correos ahora</button>
+      <div id="processStatus" class="status"></div>
+    </div>
+
+    <!-- Sección de configuración -->
+    <div class="section">
+      <div class="section-header">
+        <h3>⚙ Configuración</h3>
+      </div>
+
+      <!-- Opciones de procesamiento -->
+      <div class="form-row">
+        <div>
+          <label for="maxEmails">Máximo de correos</label>
+          <input type="number" id="maxEmails" min="10" max="500" placeholder="100">
+        </div>
+
+        <div>
+          <label for="daysBack">Días hacia atrás</label>
+          <select id="daysBack">
+            <option value="-1">Todos</option>
+            <option value="1">1 día</option>
+            <option value="3">3 días</option>
+            <option value="7">7 días</option>
+            <option value="15">15 días</option>
+            <option value="30">30 días</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Procesamiento automático -->
+      <h4>📅 Procesamiento automático</h4>
+      <div class="form-row">
+        <div class="checkbox-wrapper" style="flex: 1;">
+          <input type="checkbox" id="autoProcess">
+          <label for="autoProcess">Procesar diariamente</label>
+        </div>
+
+        <div>
+          <label for="processHour">Hora del día</label>
+          <select id="processHour">
+            <option value="0">00:00</option>
+            <option value="1">01:00</option>
+            <option value="2">02:00</option>
+            <option value="3">03:00</option>
+            <option value="4">04:00</option>
+            <option value="5">05:00</option>
+            <option value="6">06:00</option>
+            <option value="7">07:00</option>
+            <option value="8">08:00</option>
+            <option value="9">09:00</option>
+            <option value="10">10:00</option>
+            <option value="11">11:00</option>
+            <option value="12">12:00</option>
+            <option value="13">13:00</option>
+            <option value="14">14:00</option>
+            <option value="15">15:00</option>
+            <option value="16">16:00</option>
+            <option value="17">17:00</option>
+            <option value="18">18:00</option>
+            <option value="19">19:00</option>
+            <option value="20">20:00</option>
+            <option value="21">21:00</option>
+            <option value="22">22:00</option>
+            <option value="23">23:00</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Evitar subdominios -->
+      <h4>
+        🌐 Gestión de subdominios
+        <span class="info-icon">
+          ℹ
+          <span class="tooltip-text">
+            <strong>Subdominios ignorados (42 total)</strong>
+            <div class="subdomain-list">
+              <span>e</span>
+              <span>mail</span>
+              <span>info</span>
+              <span>news</span>
+              <span>noreply</span>
+              <span>no-reply</span>
+              <span>newsletter</span>
+              <span>support</span>
+              <span>help</span>
+              <span>notify</span>
+              <span>notifications</span>
+              <span>alerts</span>
+              <span>email</span>
+              <span>marketing</span>
+              <span>promo</span>
+              <span>promos</span>
+              <span>offers</span>
+              <span>deals</span>
+              <span>updates</span>
+              <span>www</span>
+              <span>webmail</span>
+              <span>smtp</span>
+              <span>imap</span>
+              <span>pop</span>
+              <span>mx</span>
+              <span>mx1</span>
+              <span>mx2</span>
+              <span>contact</span>
+              <span>hello</span>
+              <span>hi</span>
+              <span>welcome</span>
+              <span>team</span>
+              <span>admin</span>
+              <span>accounts</span>
+              <span>account</span>
+              <span>billing</span>
+              <span>invoice</span>
+              <span>receipts</span>
+              <span>customerservice</span>
+              <span>service</span>
+              <span>donotreply</span>
+              <span>bounce</span>
+              <span>mailer</span>
+              <span>sender</span>
+              <span>system</span>
+              <span>automated</span>
+              <span>auto</span>
+            </div>
+          </span>
+        </span>
+      </h4>
+      <div class="checkbox-wrapper">
+        <input type="checkbox" id="avoidSubdomains">
+        <label for="avoidSubdomains">Ignorar subdominios comunes al etiquetar</label>
+      </div>
+
+      <!-- Dominios genéricos -->
+      <h4>📋 Dominios genéricos</h4>
+      <p style="margin-top: 0; color: #5f6368; font-size: 13px;">
+        Los correos de estos dominios se agruparán bajo la etiqueta "generico"
+      </p>
+
+      <div class="input-group">
+        <input type="text" id="newDomain" placeholder="ejemplo.com">
+        <button id="addDomainButton" onclick="addDomain()" class="secondary">Añadir</button>
+      </div>
+
+      <div class="tag-container" id="domainTags"></div>
+    </div>
+
+    <!-- Botón de guardado -->
+    <div class="section">
+      <button id="saveButton" onclick="saveConfig()">💾 Guardar configuración</button>
+      <div id="saveStatus" class="status"></div>
+    </div>
+
+    <!-- Sección de estadísticas -->
+    <div class="section">
+      <div class="section-header">
+        <h3>📊 Estadísticas</h3>
+      </div>
+
+      <!-- Contadores principales con diseño de cards -->
+      <div class="stats-container">
+        <div class="stats-card">
+          <div class="stats-title">Procesados</div>
+          <div class="stats-value" id="totalProcessed">0</div>
+          <div class="stats-label">correos</div>
+        </div>
+
+        <div class="stats-card">
+          <div class="stats-title">Etiquetados</div>
+          <div class="stats-value" id="totalLabeled">0</div>
+          <div class="stats-label">correos</div>
+        </div>
+
+        <div class="stats-card">
+          <div class="stats-title">Última vez</div>
+          <div class="stats-value" id="lastRun" style="font-size: 14px;">Nunca</div>
+        </div>
+      </div>
+
+      <!-- Gráfico de dominios -->
+      <h4>📈 Gráfico de dominios</h4>
+      <div id="chartContainer" class="chart-container">
+        <p style="text-align: center; color: #80868b; margin: 60px 0;">
+          No hay datos suficientes para mostrar un gráfico
+        </p>
+      </div>
+
+      <!-- Top dominios -->
+      <h4>🏆 Top dominios</h4>
+      <div id="domainStats" class="stats-container" style="display: block;">
+        <p style="text-align: center; color: #80868b; padding: 20px 0;">
+          No hay estadísticas disponibles
+        </p>
+      </div>
+
+      <!-- Botones de acción -->
+      <div style="display: flex; gap: 8px; margin-top: 12px;">
+        <button onclick="exportStats()" class="secondary">📥 Exportar CSV</button>
+        <button onclick="clearStats()" class="danger">🗑 Limpiar estadísticas</button>
+      </div>
+      <div id="statsStatus" class="status"></div>
+    </div>
+
+    <!-- Footer -->
+    <div style="text-align: center; padding: 16px 0; color: #80868b; font-size: 12px; border-top: 1px solid #dadce0; margin-top: 20px;">
+      <p style="margin: 4px 0;">OEG v0.4</p>
+      <p style="margin: 4px 0;">
+        Por <a href="https://x.com/hex686f6c61" target="_blank" style="color: var(--primary-color); text-decoration: none;">@hex686f6c61</a>
+      </p>
+    </div>
+
+    <?!= HtmlService.createHtmlOutputFromFile('Script').getContent(); ?>
+  </body>
+</html>
