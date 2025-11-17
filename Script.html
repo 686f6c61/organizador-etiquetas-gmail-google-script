@@ -1,0 +1,490 @@
+<script>
+  /**
+   * @file Script.html
+   * @description Código JavaScript del lado del cliente con validación mejorada y feedback visual
+   * @author 686f6c61
+   * @version 0.4
+   * @date 2025-11-17
+   */
+
+  // --- Variables Globales ---
+  /** @type {Object} Almacena la configuración actual del script. */
+  let config = {};
+  /** @type {Object} Almacena los datos de estadísticas. */
+  let statsData = {
+    totalProcessed: 0,
+    totalLabeled: 0,
+    domainStats: {},
+    lastRun: null
+  };
+  
+  /**
+   * @description Se ejecuta cuando el DOM está completamente cargado. Inicia la carga de configuración y estadísticas.
+   */
+  document.addEventListener('DOMContentLoaded', function() {
+    loadConfig();
+    loadStats();
+  });
+  
+  // --- Funciones de Carga de Datos ---
+  /**
+   * @description Solicita la configuración al servidor (Code.gs) y la carga en la UI.
+   */
+  function loadConfig() {
+    showStatus('processStatus', 'Cargando configuración...', 'info');
+    google.script.run
+      .withSuccessHandler(updateUI)
+      .withFailureHandler(handleError)
+      .getConfig();
+  }
+  
+  /**
+   * @description Solicita las estadísticas al servidor (Statistics.gs) y actualiza la UI.
+   */
+  function loadStats() {
+    google.script.run
+      .withSuccessHandler(updateStatsUI)
+      .withFailureHandler(handleError)
+      .getStats();
+  }
+  
+  // --- Funciones de Actualización de la UI ---
+  /**
+   * @description Actualiza los elementos de la UI con la configuración cargada.
+   * @param {Object} loadedConfig - El objeto de configuración recibido del servidor.
+   */
+  function updateUI(loadedConfig) {
+    config = loadedConfig;
+    
+    document.getElementById('maxEmails').value = config.maxEmails;
+    
+    const daysBackSelect = document.getElementById('daysBack');
+    if (config.daysBack === -1) {
+      daysBackSelect.value = "-1";
+    } else {
+      daysBackSelect.value = config.daysBack;
+    }
+    
+    document.getElementById('autoProcess').checked = config.autoProcess;
+    document.getElementById('processHour').value = config.processHour;
+    document.getElementById('avoidSubdomains').checked = config.avoidSubdomains;
+    
+    updateDomainTags();
+    hideStatus('processStatus');
+  }
+  
+  /**
+   * @description Actualiza la sección de estadísticas de la UI con los datos recibidos.
+   * @param {Object} loadedStats - El objeto de estadísticas recibido del servidor.
+   */
+  function updateStatsUI(loadedStats) {
+    if (loadedStats) {
+      statsData = loadedStats;
+      
+      // Actualizar los contadores principales
+      document.getElementById('totalProcessed').textContent = statsData.totalProcessed || 0;
+      document.getElementById('totalLabeled').textContent = statsData.totalLabeled || 0;
+      
+      // Actualizar la fecha de última ejecución
+      if (statsData.lastRun) {
+        const date = new Date(statsData.lastRun);
+        document.getElementById('lastRun').textContent = date.toLocaleString();
+      } else {
+        document.getElementById('lastRun').textContent = 'Nunca';
+      }
+      
+      // Actualizar las estadísticas de dominios
+      updateDomainStats();
+      
+      // Generar el gráfico
+      generateChart();
+    }
+  }
+  
+  /**
+   * @description Genera un gráfico de barras horizontales para visualizar los dominios más frecuentes.
+   */
+  function generateChart() {
+    const chartContainer = document.getElementById('chartContainer');
+    chartContainer.innerHTML = '';
+    
+    const sortedDomains = Object.keys(statsData.domainStats || {}).sort((a, b) => {
+      return (statsData.domainStats[b] || 0) - (statsData.domainStats[a] || 0);
+    });
+    
+    const topDomains = sortedDomains.slice(0, 5);
+    
+    if (topDomains.length === 0) {
+      chartContainer.innerHTML = '<p>No hay datos suficientes para mostrar un gráfico</p>';
+      return;
+    }
+    
+    const maxValue = Math.max(...topDomains.map(domain => statsData.domainStats[domain]));
+    
+    topDomains.forEach(domain => {
+      const count = statsData.domainStats[domain] || 0;
+      const percentage = (count / maxValue) * 100;
+      
+      const barContainer = document.createElement('div');
+      barContainer.style.width = '100%';
+      barContainer.style.marginBottom = '10px';
+      
+      const bar = document.createElement('div');
+      bar.className = 'chart-bar';
+      bar.style.width = percentage + '%';
+      
+      const label = document.createElement('span');
+      label.className = 'chart-bar-label';
+      label.textContent = domain;
+      
+      const value = document.createElement('span');
+      value.className = 'chart-bar-value';
+      value.textContent = count;
+      
+      bar.appendChild(label);
+      bar.appendChild(value);
+      barContainer.appendChild(bar);
+      chartContainer.appendChild(barContainer);
+    });
+    
+    const legend = document.createElement('div');
+    legend.className = 'chart-legend';
+    legend.innerHTML = '<span>Dominios más frecuentes</span><span>Cantidad de correos</span>';
+    chartContainer.appendChild(legend);
+  }
+  
+  /**
+   * @description Actualiza la lista de los dominios con más correos etiquetados.
+   */
+  function updateDomainStats() {
+    const container = document.getElementById('domainStats');
+    container.innerHTML = '';
+    
+    // Ordenar dominios por cantidad de correos (descendente)
+    const sortedDomains = Object.keys(statsData.domainStats || {}).sort((a, b) => {
+      return (statsData.domainStats[b] || 0) - (statsData.domainStats[a] || 0);
+    });
+    
+    // Mostrar solo los 10 dominios principales
+    const topDomains = sortedDomains.slice(0, 10);
+    
+    if (topDomains.length === 0) {
+      container.innerHTML = '<p>No hay estadísticas disponibles</p>';
+      return;
+    }
+    
+    // Crear elementos para cada dominio
+    topDomains.forEach(domain => {
+      const count = statsData.domainStats[domain] || 0;
+      
+      const domainStat = document.createElement('div');
+      domainStat.className = 'domain-stat';
+      
+      const domainName = document.createElement('div');
+      domainName.className = 'domain-name';
+      domainName.textContent = domain;
+      
+      const domainCount = document.createElement('div');
+      domainCount.className = 'domain-count';
+      domainCount.textContent = count;
+      
+      domainStat.appendChild(domainName);
+      domainStat.appendChild(domainCount);
+      container.appendChild(domainStat);
+    });
+  }
+  
+  // --- Funciones de Gestión de Etiquetas (Tags) ---
+  /**
+   * @description Actualiza la visualización de las etiquetas de dominios genéricos.
+   */
+  function updateDomainTags() {
+    const container = document.getElementById('domainTags');
+    container.innerHTML = '';
+    
+    config.genericDomains.forEach(function(domain) {
+      const tag = document.createElement('div');
+      tag.className = 'tag';
+      tag.innerHTML = domain + '<span class="tag-delete" onclick="removeDomain(\'' + domain + '\')">&times;</span>';
+      container.appendChild(tag);
+    });
+  }
+  
+  /**
+   * @description Valida si un dominio es válido.
+   * @param {String} domain - Dominio a validar
+   * @returns {Boolean} true si es válido
+   */
+  function isValidDomain(domain) {
+    if (!domain || domain.length > 253) return false;
+    const domainRegex = /^([a-z0-9]+(-[a-z0-9]+)*\.)+[a-z]{2,}$/i;
+    return domainRegex.test(domain);
+  }
+
+  /**
+   * @description Añade un nuevo dominio a la lista de genéricos desde el campo de entrada.
+   */
+  function addDomain() {
+    const input = document.getElementById('newDomain');
+    const domain = input.value.trim().toLowerCase();
+
+    if (!domain) {
+      showStatus('saveStatus', 'Por favor, ingrese un dominio', 'error');
+      setTimeout(() => hideStatus('saveStatus'), 2000);
+      return;
+    }
+
+    if (!isValidDomain(domain)) {
+      showStatus('saveStatus', 'El dominio ingresado no es válido', 'error');
+      setTimeout(() => hideStatus('saveStatus'), 2000);
+      return;
+    }
+
+    if (config.genericDomains.includes(domain)) {
+      showStatus('saveStatus', 'El dominio ya está en la lista', 'error');
+      setTimeout(() => hideStatus('saveStatus'), 2000);
+      return;
+    }
+
+    config.genericDomains.push(domain);
+    updateDomainTags();
+    input.value = '';
+    showStatus('saveStatus', 'Dominio añadido. Recuerda guardar la configuración.', 'info');
+    setTimeout(() => hideStatus('saveStatus'), 2000);
+  }
+  
+  /**
+   * @description Elimina un dominio de la lista de genéricos.
+   * @param {String} domain - El dominio a eliminar.
+   */
+  function removeDomain(domain) {
+    config.genericDomains = config.genericDomains.filter(d => d !== domain);
+    updateDomainTags();
+  }
+  
+  // --- Funciones de Acción del Usuario ---
+  /**
+   * @description Valida la configuración antes de guardarla.
+   * @returns {Object} { valid: boolean, errors: string[] }
+   */
+  function validateConfigBeforeSave() {
+    const errors = [];
+
+    const maxEmails = parseInt(document.getElementById('maxEmails').value);
+    if (isNaN(maxEmails) || maxEmails < 10 || maxEmails > 500) {
+      errors.push('Máximo de correos debe estar entre 10 y 500');
+    }
+
+    const processHour = parseInt(document.getElementById('processHour').value);
+    if (isNaN(processHour) || processHour < 0 || processHour > 23) {
+      errors.push('Hora de procesamiento debe estar entre 0 y 23');
+    }
+
+    const daysBack = parseInt(document.getElementById('daysBack').value);
+    if (isNaN(daysBack) || (daysBack < -1 || daysBack > 365)) {
+      errors.push('Días hacia atrás debe estar entre -1 (todos) y 365');
+    }
+
+    return {
+      valid: errors.length === 0,
+      errors: errors
+    };
+  }
+
+  /**
+   * @description Recopila la configuración actual de la UI y la envía al servidor para guardarla.
+   */
+  function saveConfig() {
+    // Validar antes de guardar
+    const validation = validateConfigBeforeSave();
+    if (!validation.valid) {
+      showStatus('saveStatus', 'Errores de validación:<br>' + validation.errors.join('<br>'), 'error');
+      return;
+    }
+
+    // Actualizar la configuración con los valores actuales
+    config.maxEmails = parseInt(document.getElementById('maxEmails').value) || 100;
+    config.daysBack = parseInt(document.getElementById('daysBack').value);
+
+    // Obtener configuración de procesamiento automático
+    config.autoProcess = document.getElementById('autoProcess').checked;
+    config.processHour = parseInt(document.getElementById('processHour').value);
+    config.avoidSubdomains = document.getElementById('avoidSubdomains').checked;
+
+    // Aplicar límites de seguridad
+    if (config.maxEmails < 10) config.maxEmails = 10;
+    if (config.maxEmails > 500) config.maxEmails = 500;
+
+    showStatus('saveStatus', 'Guardando configuración...', 'info');
+    
+    google.script.run
+      .withSuccessHandler(function(result) {
+        if (result) {
+          let message = 'Configuración guardada correctamente';
+          if (config.autoProcess) {
+            message += '<br>Procesamiento automático programado para las ' + 
+                      config.processHour.toString().padStart(2, '0') + ':00 todos los días';
+          }
+          showStatus('saveStatus', message, 'success');
+          setTimeout(function() {
+            hideStatus('saveStatus');
+          }, 3000);
+        } else {
+          showStatus('saveStatus', 'Error al guardar la configuración', 'error');
+        }
+      })
+      .withFailureHandler(function(error) {
+        showStatus('saveStatus', 'Error: ' + error.message, 'error');
+      })
+      .saveConfig(config);
+  }
+  
+  /**
+   * @description Inicia el proceso de etiquetado de correos en el servidor.
+   */
+  function processEmails() {
+    showStatus('processStatus', '<div class="spinner"></div> Procesando correos...', 'info');
+
+    const processButton = document.getElementById('processButton');
+    processButton.disabled = true;
+
+    const startTime = Date.now();
+
+    google.script.run
+      .withSuccessHandler(function(stats) {
+        processButton.disabled = false;
+
+        const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+
+        if (stats.error) {
+          showStatus('processStatus', 'Error al procesar correos:<br>' + stats.error, 'error');
+          return;
+        }
+
+        let message = `✓ Completado en ${duration}s<br><br>`;
+        message += `Procesados: ${stats.processed || 0} correos<br>`;
+        message += `Etiquetados: ${stats.labeled || 0} correos<br>`;
+
+        if (stats.errors && stats.errors > 0) {
+          message += `<span style="color: #f44336;">Errores: ${stats.errors}</span><br>`;
+        }
+
+        if (stats.message) {
+          message += `<br><i>${stats.message}</i><br>`;
+        }
+
+        if (stats.domains && Object.keys(stats.domains).length > 0) {
+          message += '<br>Top dominios procesados:<br>';
+          const sortedDomains = Object.keys(stats.domains)
+            .sort((a, b) => stats.domains[b] - stats.domains[a])
+            .slice(0, 5);
+
+          sortedDomains.forEach(domain => {
+            message += `• ${domain}: ${stats.domains[domain]} correos<br>`;
+          });
+        }
+
+        showStatus('processStatus', message, 'success');
+
+        // Actualizar estadísticas después de procesar
+        setTimeout(() => {
+          loadStats();
+        }, 500);
+      })
+      .withFailureHandler(function(error) {
+        processButton.disabled = false;
+        const errorMsg = error.message || error.toString();
+        showStatus('processStatus',
+          'Error al procesar correos:<br>' + errorMsg + '<br><br>Por favor, revisa los logs de ejecución.',
+          'error'
+        );
+      })
+      .processEmails();
+  }
+  
+  /**
+   * @description Solicita al servidor la exportación de estadísticas a CSV y abre el resultado.
+   */
+  function exportStats() {
+    google.script.run
+      .withSuccessHandler(function(csvUrl) {
+        if (csvUrl) {
+          // Abrir el CSV en una nueva ventana
+          window.open(csvUrl, '_blank');
+        } else {
+          showStatus('statsStatus', 'Error al exportar estadísticas', 'error');
+        }
+      })
+      .withFailureHandler(function(error) {
+        showStatus('statsStatus', 'Error: ' + error.message, 'error');
+      })
+      .exportStatsToCSV();
+  }
+  
+  /**
+   * @description Solicita al servidor que limpie todas las estadísticas acumuladas.
+   */
+  function clearStats() {
+    if (confirm('¿Estás seguro de que deseas eliminar todas las estadísticas? Esta acción no se puede deshacer.')) {
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result) {
+            showStatus('statsStatus', 'Estadísticas eliminadas correctamente', 'success');
+            
+            // Reiniciar los datos de estadísticas
+            statsData = {
+              totalProcessed: 0,
+              totalLabeled: 0,
+              domainStats: {},
+              lastRun: null
+            };
+            
+            // Actualizar la interfaz
+            updateStatsUI(statsData);
+            
+            setTimeout(function() {
+              hideStatus('statsStatus');
+            }, 3000);
+          } else {
+            showStatus('statsStatus', 'Error al eliminar estadísticas', 'error');
+          }
+        })
+        .withFailureHandler(function(error) {
+          showStatus('statsStatus', 'Error: ' + error.message, 'error');
+        })
+        .clearStats();
+    }
+  }
+  
+  // --- Funciones de Utilidad ---
+  /**
+   * @description Muestra un mensaje de estado en un elemento específico de la UI.
+   * @param {String} elementId - El ID del elemento donde mostrar el mensaje.
+   * @param {String} message - El mensaje a mostrar (puede contener HTML).
+   * @param {String} type - El tipo de mensaje ('success', 'error', 'info').
+   */
+  function showStatus(elementId, message, type) {
+    const element = document.getElementById(elementId);
+    element.innerHTML = message;
+    element.className = 'status ' + type;
+    element.style.display = 'block';
+  }
+  
+  /**
+   * @description Oculta un mensaje de estado.
+   * @param {String} elementId - El ID del elemento de estado a ocultar.
+   */
+  function hideStatus(elementId) {
+    const element = document.getElementById(elementId);
+    element.style.display = 'none';
+  }
+  
+  /**
+   * @description Maneja los errores de las llamadas al servidor, mostrándolos en la consola y en la UI.
+   * @param {Error} error - El objeto de error.
+   */
+  function handleError(error) {
+    console.error('Error:', error);
+    showStatus('processStatus', 'Error: ' + error.message, 'error');
+  }
+</script>
