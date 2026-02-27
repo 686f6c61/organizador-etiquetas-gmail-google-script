@@ -1,13 +1,15 @@
 /**
  * @file Statistics.gs
- * @description Módulo para la gestión de estadísticas de procesamiento de correos.
- *              Incluye funciones para obtener, actualizar, limpiar y exportar estadísticas.
+ * @description Modulo para la gestion de estadisticas de procesamiento de correos.
+ *              Incluye funciones para obtener, actualizar, limpiar y exportar a CSV.
+ *              Las estadisticas por dominio se limitan a MAX_DOMAIN_STATS entradas
+ *              para no exceder el limite de 9 KB por propiedad de PropertiesService.
  * @author 686f6c61
- * @version 0.4
+ * @version 0.5
  * @date 2025-11-17
  */
 
-// --- Constantes Globales de Propiedades de Estadísticas ---
+// --- Constantes ---
 const PROP_TOTAL_PROCESSED = 'totalProcessed';
 const PROP_TOTAL_LABELED = 'totalLabeled';
 const PROP_DOMAIN_STATS = 'domainStats';
@@ -16,21 +18,26 @@ const PROP_TOTAL_ERRORS = 'totalErrors';
 const PROP_FIRST_RUN = 'firstRun';
 
 /**
- * @description Obtiene las estadísticas acumuladas desde `PropertiesService`.
- * @returns {Object} Un objeto con las estadísticas (total procesado, total etiquetado, etc.).
+ * Limite maximo de dominios almacenados en estadisticas.
+ * PropertiesService tiene un tope de 9 KB por propiedad; con ~500 dominios
+ * el JSON ocupa aproximadamente 7-8 KB, dejando margen de seguridad.
+ */
+const MAX_DOMAIN_STATS = 500;
+
+/**
+ * @description Obtiene las estadisticas acumuladas desde PropertiesService.
+ * @returns {Object} Estadisticas con totales, dominios y fechas
  */
 function getStats() {
   try {
     const properties = PropertiesService.getUserProperties();
 
-    // Obtener estadísticas o valores predeterminados
     const totalProcessed = parseInt(properties.getProperty(PROP_TOTAL_PROCESSED) || '0');
     const totalLabeled = parseInt(properties.getProperty(PROP_TOTAL_LABELED) || '0');
     const totalErrors = parseInt(properties.getProperty(PROP_TOTAL_ERRORS) || '0');
     const lastRun = properties.getProperty(PROP_LAST_RUN) || null;
     const firstRun = properties.getProperty(PROP_FIRST_RUN) || null;
 
-    // Obtener estadísticas por dominio
     let domainStats = {};
     try {
       const domainStatsJson = properties.getProperty(PROP_DOMAIN_STATS);
@@ -38,7 +45,7 @@ function getStats() {
         domainStats = JSON.parse(domainStatsJson);
       }
     } catch (e) {
-      Logger.log('Error al parsear estadísticas de dominios: ' + e.toString());
+      Logger.log('Error al parsear estadisticas de dominios: ' + e.toString());
     }
 
     return {
@@ -50,7 +57,7 @@ function getStats() {
       firstRun: firstRun
     };
   } catch (e) {
-    Logger.log('Error al obtener estadísticas: ' + e.toString());
+    Logger.log('Error al obtener estadisticas: ' + e.toString());
     return {
       totalProcessed: 0,
       totalLabeled: 0,
@@ -64,21 +71,43 @@ function getStats() {
 }
 
 /**
- * @description Actualiza las estadísticas acumuladas con los resultados de un nuevo procesamiento.
- * @param {Object} stats - Estadísticas del procesamiento más reciente.
- * @returns {Boolean} `true` si la actualización fue exitosa, `false` en caso de error.
+ * @description Recorta el mapa de dominios para que no exceda el limite.
+ *              Conserva los dominios con mas correos y descarta los menos frecuentes.
+ * @private
+ * @param {Object} domainStats - Mapa dominio -> cantidad
+ * @returns {Object} Mapa recortado
+ */
+function _trimDomainStats(domainStats) {
+  const keys = Object.keys(domainStats);
+  if (keys.length <= MAX_DOMAIN_STATS) return domainStats;
+
+  // Ordenar por cantidad descendente y quedarse con los mas frecuentes
+  const sorted = keys.sort((a, b) => domainStats[b] - domainStats[a]);
+  const trimmed = {};
+  for (let i = 0; i < MAX_DOMAIN_STATS; i++) {
+    trimmed[sorted[i]] = domainStats[sorted[i]];
+  }
+
+  Logger.log('Estadisticas de dominios recortadas: ' + keys.length +
+    ' -> ' + MAX_DOMAIN_STATS);
+  return trimmed;
+}
+
+/**
+ * @description Actualiza las estadisticas acumuladas con los resultados de un procesamiento.
+ * @param {Object} stats - Estadisticas del procesamiento reciente
+ * @returns {boolean} true si la actualizacion fue exitosa
  */
 function updateStats(stats) {
   try {
     const properties = PropertiesService.getUserProperties();
     const currentStats = getStats();
 
-    // Actualizar totales
     const newTotalProcessed = currentStats.totalProcessed + (stats.processed || 0);
     const newTotalLabeled = currentStats.totalLabeled + (stats.labeled || 0);
     const newTotalErrors = currentStats.totalErrors + (stats.errors || 0);
 
-    // Actualizar estadísticas por dominio
+    // Fusionar estadisticas por dominio
     const domainStats = currentStats.domainStats || {};
 
     if (stats.domains && typeof stats.domains === 'object') {
@@ -90,30 +119,32 @@ function updateStats(stats) {
       }
     }
 
-    // Actualizar fechas
+    // Recortar si excede el limite para no reventar PropertiesService
+    const trimmedDomainStats = _trimDomainStats(domainStats);
+
     const now = new Date().toISOString();
     const firstRun = currentStats.firstRun || now;
 
-    // Guardar estadísticas actualizadas
     properties.setProperty(PROP_TOTAL_PROCESSED, newTotalProcessed.toString());
     properties.setProperty(PROP_TOTAL_LABELED, newTotalLabeled.toString());
     properties.setProperty(PROP_TOTAL_ERRORS, newTotalErrors.toString());
-    properties.setProperty(PROP_DOMAIN_STATS, JSON.stringify(domainStats));
+    properties.setProperty(PROP_DOMAIN_STATS, JSON.stringify(trimmedDomainStats));
     properties.setProperty(PROP_LAST_RUN, now);
     properties.setProperty(PROP_FIRST_RUN, firstRun);
 
-    Logger.log(`Estadísticas actualizadas: ${newTotalProcessed} procesados, ${newTotalLabeled} etiquetados, ${newTotalErrors} errores`);
+    Logger.log('Estadisticas actualizadas: ' + newTotalProcessed +
+      ' procesados, ' + newTotalLabeled + ' etiquetados, ' + newTotalErrors + ' errores');
 
     return true;
   } catch (e) {
-    Logger.log('Error al actualizar estadísticas: ' + e.toString());
+    Logger.log('Error al actualizar estadisticas: ' + e.toString());
     return false;
   }
 }
 
 /**
- * @description Elimina todas las estadísticas guardadas de `PropertiesService`.
- * @returns {Boolean} `true` si la limpieza fue exitosa, `false` en caso de error.
+ * @description Elimina todas las estadisticas guardadas.
+ * @returns {boolean} true si la limpieza fue exitosa
  */
 function clearStats() {
   try {
@@ -126,75 +157,72 @@ function clearStats() {
     properties.deleteProperty(PROP_LAST_RUN);
     properties.deleteProperty(PROP_FIRST_RUN);
 
-    Logger.log('Estadísticas eliminadas correctamente');
-
+    Logger.log('Estadisticas eliminadas correctamente');
     return true;
   } catch (e) {
-    Logger.log('Error al limpiar estadísticas: ' + e.toString());
+    Logger.log('Error al limpiar estadisticas: ' + e.toString());
     return false;
   }
 }
 
 /**
- * @description Exporta las estadísticas de dominios a un archivo CSV en Google Drive.
- * @param {Boolean} publicAccess - Si true, el archivo será público; si false, será privado
- * @returns {String|null} La URL del archivo CSV creado, o `null` en caso de error.
+ * @description Exporta las estadisticas de dominios a un archivo CSV en Google Drive.
+ * @param {boolean} publicAccess - true para enlace publico, false para privado
+ * @returns {string|null} URL del archivo CSV o null en caso de error
  */
-function exportStatsToCSV(publicAccess = false) {
+function exportStatsToCSV(publicAccess) {
+  publicAccess = publicAccess || false;
+
   try {
     const stats = getStats();
 
     if (!stats.domainStats || Object.keys(stats.domainStats).length === 0) {
-      Logger.log('No hay estadísticas de dominios para exportar');
+      Logger.log('No hay estadisticas de dominios para exportar');
       return null;
     }
 
-    // Crear contenido del CSV con más información
     let csvContent = 'Dominio,Cantidad de correos\n';
 
-    // Ordenar dominios por cantidad (descendente)
     const sortedDomains = Object.keys(stats.domainStats).sort((a, b) => {
       return stats.domainStats[b] - stats.domainStats[a];
     });
 
     sortedDomains.forEach(domain => {
-      // Escapar comas en el nombre del dominio si las hay
-      const escapedDomain = domain.includes(',') ? `"${domain}"` : domain;
-      csvContent += `${escapedDomain},${stats.domainStats[domain]}\n`;
+      // Escapar comas y comillas en el nombre del dominio
+      const escaped = domain.includes(',') || domain.includes('"')
+        ? '"' + domain.replace(/"/g, '""') + '"'
+        : domain;
+      csvContent += escaped + ',' + stats.domainStats[domain] + '\n';
     });
 
-    // Añadir resumen al final
     csvContent += '\n';
-    csvContent += `Total procesados,${stats.totalProcessed}\n`;
-    csvContent += `Total etiquetados,${stats.totalLabeled}\n`;
-    csvContent += `Total errores,${stats.totalErrors}\n`;
-    csvContent += `Primera ejecución,${stats.firstRun || 'N/A'}\n`;
-    csvContent += `Última ejecución,${stats.lastRun || 'N/A'}\n`;
+    csvContent += 'Total procesados,' + stats.totalProcessed + '\n';
+    csvContent += 'Total etiquetados,' + stats.totalLabeled + '\n';
+    csvContent += 'Total errores,' + stats.totalErrors + '\n';
+    csvContent += 'Primera ejecucion,' + (stats.firstRun || 'N/A') + '\n';
+    csvContent += 'Ultima ejecucion,' + (stats.lastRun || 'N/A') + '\n';
 
-    // Crear archivo en Google Drive
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0];
-    const fileName = `OEG_Estadisticas_${timestamp}.csv`;
+    const fileName = 'OEG_Estadisticas_' + timestamp + '.csv';
     const file = DriveApp.createFile(fileName, csvContent, MimeType.CSV);
 
-    // Configurar permisos según el parámetro
     if (publicAccess) {
       file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-      Logger.log(`Archivo CSV exportado (público): ${fileName}`);
     } else {
       file.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.VIEW);
-      Logger.log(`Archivo CSV exportado (privado): ${fileName}`);
     }
 
+    Logger.log('Archivo CSV exportado: ' + fileName);
     return file.getUrl();
   } catch (e) {
-    Logger.log('Error al exportar estadísticas: ' + e.toString());
+    Logger.log('Error al exportar estadisticas: ' + e.toString());
     return null;
   }
 }
 
 /**
- * @description Obtiene un resumen de las estadísticas.
- * @returns {Object} Resumen de estadísticas
+ * @description Obtiene un resumen compacto de las estadisticas.
+ * @returns {Object|null} Resumen con totales, dominios unicos y top 5
  */
 function getStatsSummary() {
   try {
@@ -219,7 +247,7 @@ function getStatsSummary() {
       firstRun: stats.firstRun
     };
   } catch (e) {
-    Logger.log('Error al obtener resumen de estadísticas: ' + e.toString());
+    Logger.log('Error al obtener resumen de estadisticas: ' + e.toString());
     return null;
   }
 }

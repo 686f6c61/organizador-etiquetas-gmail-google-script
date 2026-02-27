@@ -1,61 +1,63 @@
 /**
  * @file EmailProcessor.gs
- * @description Módulo para el procesamiento eficiente de correos electrónicos.
- *              Incluye optimizaciones para evitar timeouts y procesamiento por lotes.
+ * @description Modulo para el procesamiento de correos electronicos.
+ *              Incluye proteccion contra timeouts (4.5 min de los 6 que permite GAS)
+ *              y procesamiento por lotes con estadisticas.
  * @author 686f6c61
- * @version 0.4
+ * @version 0.5
  * @date 2025-11-17
  */
 
 /**
- * @description Procesador de correos electrónicos con optimizaciones de rendimiento.
+ * @description Procesador de correos con control de tiempo y procesamiento por lotes.
  */
 class EmailProcessor {
   constructor() {
     this.labelManager = new LabelManager();
     this.configManager = new ConfigManager();
-    this.maxExecutionTime = 270000; // 4.5 minutos (límite de Apps Script es 6 min)
+    // 4.5 minutos: margen de seguridad sobre el limite de 6 min de Apps Script
+    this.maxExecutionTime = 270000;
     this.startTime = null;
   }
 
   /**
-   * @description Verifica si se está acercando al límite de tiempo de ejecución.
-   * @returns {Boolean} true si se debe detener el procesamiento
+   * @description Comprueba si se esta acercando al limite de tiempo de ejecucion.
+   * @returns {boolean} true si se debe detener el procesamiento
    */
   _shouldStopExecution() {
     if (!this.startTime) return false;
-    const elapsed = Date.now() - this.startTime;
-    return elapsed > this.maxExecutionTime;
+    return (Date.now() - this.startTime) > this.maxExecutionTime;
   }
 
   /**
-   * @description Construye la consulta de búsqueda de Gmail.
-   * @param {Object} config - Configuración actual
-   * @returns {String} Query de búsqueda
+   * @description Construye la consulta de busqueda de Gmail.
+   * @param {string} readFilter - Filtro de lectura: 'is:read' o 'is:unread'
+   * @param {Object} config - Configuracion actual
+   * @returns {string} Query de busqueda para GmailApp.search()
    */
-  _buildSearchQuery(config) {
-    let query = 'is:read';
+  _buildSearchQuery(readFilter, config) {
+    let query = readFilter;
 
-    // Añadir filtro de fecha si no es "Todos"
     if (config.daysBack !== -1 && config.daysBack > 0) {
       const dateLimit = new Date();
       dateLimit.setDate(dateLimit.getDate() - config.daysBack);
 
       const year = dateLimit.getFullYear();
-      const month = dateLimit.getMonth() + 1;
-      const day = dateLimit.getDate();
+      const month = String(dateLimit.getMonth() + 1).padStart(2, '0');
+      const day = String(dateLimit.getDate()).padStart(2, '0');
 
-      query += ` after:${year}/${month}/${day}`;
+      query += ' after:' + year + '/' + month + '/' + day;
     }
 
     return query;
   }
 
   /**
-   * @description Procesa un lote de hilos de correo.
+   * @description Procesa un lote de hilos de correo, extrayendo dominios y preparando
+   *              las asignaciones de etiquetas para aplicarlas en bloque.
    * @param {Array<GmailThread>} threads - Hilos a procesar
-   * @param {Object} config - Configuración actual
-   * @returns {Object} Estadísticas del procesamiento
+   * @param {Object} config - Configuracion actual
+   * @returns {Object} Estadisticas del procesamiento
    */
   _processThreadBatch(threads, config) {
     const stats = {
@@ -69,43 +71,36 @@ class EmailProcessor {
     const threadLabelPairs = [];
 
     for (const thread of threads) {
-      // Verificar límite de tiempo
       if (this._shouldStopExecution()) {
         stats.stopped = true;
-        Logger.log('Procesamiento detenido: límite de tiempo alcanzado');
+        Logger.log('Procesamiento detenido: limite de tiempo alcanzado');
         break;
       }
 
       try {
-        // Obtener el primer mensaje del hilo para extraer el remitente
         const messages = thread.getMessages();
         if (messages.length === 0) continue;
 
-        // Solo procesar el primer mensaje del hilo (el remitente original)
+        // Usar el primer mensaje del hilo para determinar el remitente original
         const firstMessage = messages[0];
+        const from = firstMessage.getFrom();
+        const domain = this.labelManager.extractDomain(from);
 
-        // Solo procesar si el mensaje está leído
-        if (!firstMessage.isUnread()) {
-          const from = firstMessage.getFrom();
-          const domain = this.labelManager.extractDomain(from);
+        if (domain) {
+          const labelName = this.labelManager.getLabelName(domain, config);
 
-          if (domain) {
-            const labelName = this.labelManager.getLabelName(domain, config);
-
-            if (labelName) {
-              // Añadir al lote para procesamiento
-              threadLabelPairs.push({
-                thread: thread,
-                labelName: labelName,
-                domain: domain
-              });
-            }
+          if (labelName) {
+            threadLabelPairs.push({
+              thread: thread,
+              labelName: labelName,
+              domain: domain
+            });
           }
-
-          stats.processed++;
         }
+
+        stats.processed++;
       } catch (e) {
-        Logger.log(`Error al procesar hilo: ${e.toString()}`);
+        Logger.log('Error al procesar hilo: ' + e.toString());
         stats.errors++;
       }
     }
@@ -117,7 +112,7 @@ class EmailProcessor {
         stats.labeled += labelStats.applied;
         stats.errors += labelStats.errors;
 
-        // Registrar estadísticas por dominio
+        // Contabilizar dominios procesados
         threadLabelPairs.forEach(pair => {
           if (!stats.domains[pair.domain]) {
             stats.domains[pair.domain] = 0;
@@ -125,7 +120,7 @@ class EmailProcessor {
           stats.domains[pair.domain]++;
         });
       } catch (e) {
-        Logger.log(`Error al aplicar etiquetas en lote: ${e.toString()}`);
+        Logger.log('Error al aplicar etiquetas en lote: ' + e.toString());
         stats.errors += threadLabelPairs.length;
       }
     }
@@ -134,22 +129,21 @@ class EmailProcessor {
   }
 
   /**
-   * @description Procesa los correos electrónicos según la configuración.
-   * @returns {Object} Estadísticas del procesamiento o error
+   * @description Procesa correos leidos segun la configuracion.
+   * @returns {Object} Estadisticas del procesamiento o error
    */
   processEmails() {
     this.startTime = Date.now();
 
     try {
       const config = this.configManager.getConfig();
-      const query = this._buildSearchQuery(config);
+      const query = this._buildSearchQuery('is:read', config);
 
-      Logger.log(`Iniciando procesamiento con query: ${query}`);
-      Logger.log(`Configuración: maxEmails=${config.maxEmails}, daysBack=${config.daysBack}`);
+      Logger.log('Iniciando procesamiento con query: ' + query);
+      Logger.log('Configuracion: maxEmails=' + config.maxEmails + ', daysBack=' + config.daysBack);
 
-      // Obtener hilos de correo
       const threads = GmailApp.search(query, 0, config.maxEmails);
-      Logger.log(`Hilos encontrados: ${threads.length}`);
+      Logger.log('Hilos encontrados: ' + threads.length);
 
       if (threads.length === 0) {
         return {
@@ -161,19 +155,18 @@ class EmailProcessor {
         };
       }
 
-      // Procesar hilos
       const stats = this._processThreadBatch(threads, config);
 
-      // Registrar resumen
-      Logger.log(`Procesamiento completado: ${stats.processed} procesados, ${stats.labeled} etiquetados, ${stats.errors} errores`);
+      Logger.log('Procesamiento completado: ' + stats.processed +
+        ' procesados, ' + stats.labeled + ' etiquetados, ' + stats.errors + ' errores');
 
       if (stats.stopped) {
-        stats.message = 'Procesamiento detenido por límite de tiempo. Ejecute nuevamente para continuar.';
+        stats.message = 'Procesamiento detenido por limite de tiempo. Ejecute nuevamente para continuar.';
       }
 
       return stats;
     } catch (e) {
-      Logger.log(`Error en processEmails: ${e.toString()}`);
+      Logger.log('Error en processEmails: ' + e.toString());
       return {
         error: e.toString(),
         message: 'Error al procesar correos: ' + e.toString()
@@ -182,18 +175,17 @@ class EmailProcessor {
   }
 
   /**
-   * @description Procesa correos y actualiza las estadísticas.
+   * @description Procesa correos y actualiza las estadisticas acumuladas.
    * @returns {Object} Resultado del procesamiento
    */
   processEmailsWithStats() {
     const result = this.processEmails();
 
-    // Actualizar estadísticas si no hubo error
     if (!result.error && result.processed > 0) {
       try {
         updateStats(result);
       } catch (e) {
-        Logger.log(`Error al actualizar estadísticas: ${e.toString()}`);
+        Logger.log('Error al actualizar estadisticas: ' + e.toString());
         result.statsError = e.toString();
       }
     }
@@ -202,14 +194,16 @@ class EmailProcessor {
   }
 
   /**
-   * @description Obtiene una vista previa de los correos que serían procesados.
-   * @param {Number} limit - Número máximo de correos a previsualizar
+   * @description Obtiene una vista previa de los correos que serian procesados.
+   * @param {number} limit - Numero maximo de correos a previsualizar
    * @returns {Object} Vista previa del procesamiento
    */
-  previewProcessing(limit = 10) {
+  previewProcessing(limit) {
+    limit = limit || 10;
+
     try {
       const config = this.configManager.getConfig();
-      const query = this._buildSearchQuery(config);
+      const query = this._buildSearchQuery('is:read', config);
 
       const threads = GmailApp.search(query, 0, limit);
       const preview = [];
@@ -233,7 +227,7 @@ class EmailProcessor {
             });
           }
         } catch (e) {
-          Logger.log(`Error en preview: ${e.toString()}`);
+          Logger.log('Error en preview: ' + e.toString());
         }
       });
 
@@ -243,15 +237,13 @@ class EmailProcessor {
         query: query
       };
     } catch (e) {
-      Logger.log(`Error en previewProcessing: ${e.toString()}`);
-      return {
-        error: e.toString()
-      };
+      Logger.log('Error en previewProcessing: ' + e.toString());
+      return { error: e.toString() };
     }
   }
 
   /**
-   * @description Procesa solo correos no leídos.
+   * @description Procesa correos no leidos.
    * @returns {Object} Resultado del procesamiento
    */
   processUnreadEmails() {
@@ -259,63 +251,49 @@ class EmailProcessor {
 
     try {
       const config = this.configManager.getConfig();
+      const query = this._buildSearchQuery('is:unread', config);
 
-      // Modificar query para correos no leídos
-      let query = 'is:unread';
-
-      if (config.daysBack !== -1 && config.daysBack > 0) {
-        const dateLimit = new Date();
-        dateLimit.setDate(dateLimit.getDate() - config.daysBack);
-        query += ` after:${dateLimit.getFullYear()}/${dateLimit.getMonth() + 1}/${dateLimit.getDate()}`;
-      }
-
-      Logger.log(`Procesando correos no leídos con query: ${query}`);
+      Logger.log('Procesando correos no leidos con query: ' + query);
 
       const threads = GmailApp.search(query, 0, config.maxEmails);
       const stats = this._processThreadBatch(threads, config);
 
-      Logger.log(`Correos no leídos procesados: ${stats.processed} procesados, ${stats.labeled} etiquetados`);
+      Logger.log('Correos no leidos: ' + stats.processed +
+        ' procesados, ' + stats.labeled + ' etiquetados');
 
       return stats;
     } catch (e) {
-      Logger.log(`Error en processUnreadEmails: ${e.toString()}`);
-      return {
-        error: e.toString()
-      };
+      Logger.log('Error en processUnreadEmails: ' + e.toString());
+      return { error: e.toString() };
     }
   }
 
-  /**
-   * @description Limpia la caché del procesador.
-   */
   clearCache() {
     this.labelManager.clearCache();
   }
 }
 
-// Funciones públicas para mantener compatibilidad con Code.gs
+// --- Funciones publicas ---
 
 /**
- * @description Procesa correos electrónicos.
- * @returns {Object} Estadísticas del procesamiento
+ * @description Procesa correos leidos y actualiza estadisticas.
+ * @returns {Object} Estadisticas del procesamiento
  */
 function processEmails() {
-  const processor = new EmailProcessor();
-  return processor.processEmailsWithStats();
+  return new EmailProcessor().processEmailsWithStats();
 }
 
 /**
  * @description Obtiene vista previa del procesamiento.
- * @param {Number} limit - Límite de correos a previsualizar
+ * @param {number} limit - Limite de correos
  * @returns {Object} Vista previa
  */
 function previewProcessing(limit) {
-  const processor = new EmailProcessor();
-  return processor.previewProcessing(limit);
+  return new EmailProcessor().previewProcessing(limit);
 }
 
 /**
- * @description Procesa correos no leídos.
+ * @description Procesa correos no leidos y actualiza estadisticas.
  * @returns {Object} Resultado del procesamiento
  */
 function processUnreadEmails() {

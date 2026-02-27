@@ -1,4 +1,4 @@
-# OEG - Organizador de etiquetas para Gmail (v0.4)
+# OEG - Organizador de etiquetas para Gmail (v0.5)
 
 <div align="center">
   <img src="https://img.shields.io/badge/Google%20Apps%20Script-4285F4?style=for-the-badge&logo=google&logoColor=white" alt="Google Apps Script" />
@@ -8,311 +8,292 @@
   <img src="https://img.shields.io/badge/CSS3-1572B6?style=for-the-badge&logo=css3&logoColor=white" alt="CSS3" />
 </div>
 
-**OEG** es un potente script de Google Apps Script diseñado para organizar automáticamente tu bandeja de entrada de Gmail mediante la creación y asignación de etiquetas basadas en el dominio del remitente. Simplifica la gestión de correos, mejora la visibilidad y te permite tener un control total sobre cómo se clasifican tus mensajes.
+**OEG** es un script de Google Apps Script que organiza automaticamente tu bandeja de entrada de Gmail mediante etiquetas basadas en el dominio del remitente. Extrae el dominio registrable de cada correo (por ejemplo, `amazon` de `newsletter.amazon.com`) y crea o asigna la etiqueta correspondiente.
 
 ![Interfaz principal del Configurador](img/configurador.png)
 
-## Índice
+## Indice
 
-- [Descripción](#descripción)
-- [Características principales](#características-principales)
-- [Novedades en v0.4](#novedades-en-v04)
-- [Instalación](#instalación)
+- [Descripcion](#descripcion)
+- [Caracteristicas principales](#caracteristicas-principales)
+- [Novedades en v0.5](#novedades-en-v05)
+- [Instalacion](#instalacion)
 - [Uso](#uso)
-- [Configuración detallada](#configuración-detallada)
-- [Estadísticas y visualización](#estadísticas-y-visualización)
-- [Arquitectura técnica](#arquitectura-técnica)
+- [Configuracion detallada](#configuracion-detallada)
+- [Estadisticas y visualizacion](#estadisticas-y-visualizacion)
+- [Arquitectura tecnica](#arquitectura-tecnica)
 - [Permisos requeridos](#permisos-requeridos)
 - [Limitaciones](#limitaciones)
-- [Solución de problemas](#solución-de-problemas)
-- [Migración desde v0.3](#migración-desde-v03)
-- [Cómo contribuir](#cómo-contribuir)
+- [Solucion de problemas](#solucion-de-problemas)
+- [Migracion desde v0.4](#migracion-desde-v04)
+- [Como contribuir](#como-contribuir)
 
-## Descripción
+## Descripcion
 
-Este script analiza los correos electrónicos leídos en tu bandeja de entrada, extrae el dominio del remitente y crea una etiqueta con el nombre de ese dominio (por ejemplo, `github`, `amazon`, `google`). Además, agrupa los correos de proveedores de correo comunes (como `gmail.com`, `outlook.com`) bajo una única etiqueta `generico` para mantener tu lista de etiquetas limpia y organizada.
+El script analiza los correos de tu bandeja de entrada, extrae el dominio registrable del remitente y crea una etiqueta con ese nombre. Por ejemplo, un correo de `noreply@newsletter.amazon.com` recibe la etiqueta `amazon`. Los correos de proveedores genericos (`gmail.com`, `outlook.com`, etc.) se agrupan bajo la etiqueta `generico`.
 
-La característica más avanzada es su capacidad para **ignorar subdominios específicos** (como `e.`, `info.`, `news.`), permitiendo agrupar correos de `info@e.atlassian.com` y `Jira@atlassian.com` bajo la misma etiqueta `atlassian`.
+La v0.5 mejora sustancialmente la extraccion de dominios: trabaja desde la derecha del nombre de dominio para obtener siempre el dominio de la organizacion, con soporte para TLD de pais como `.co.uk`, `.com.br` o `.gob.es`.
 
-## Características principales
+## Caracteristicas principales
 
-- **Organización automática**: Procesa correos leídos y les asigna etiquetas basadas en el dominio del remitente.
-- **Creación de etiquetas inteligente**: Genera nuevas etiquetas si no existen.
-- **Agrupación de dominios genéricos**: Mantiene tu espacio de trabajo limpio agrupando correos de dominios como `gmail.com` o `yahoo.com` en una sola etiqueta: `generico`.
-- **Control de subdominios**: Permite ignorar subdominios personalizables (ej. `e`, `mail`, `info`) para una clasificación más precisa.
-- **Procesamiento programado**: Configura el script para que se ejecute automáticamente cada día a la hora que elijas.
-- **Panel de control interactivo**: Una interfaz de usuario intuitiva integrada en Gmail para configurar y ejecutar el script.
-- **Panel de estadísticas**: Visualiza datos sobre los correos procesados, las etiquetas creadas y los dominios más frecuentes a través de gráficos y contadores.
-- **Exportación de datos**: Exporta las estadísticas de dominios a un archivo CSV compatible con Google Sheets.
+- **Organizacion automatica**: procesa correos leidos y asigna etiquetas por dominio del remitente.
+- **Extraccion inteligente de dominios**: resuelve subdominios y TLD de pais para obtener el nombre de la organizacion (`shop.example.co.uk` -> `example`).
+- **Agrupacion de dominios genericos**: correos de Gmail, Outlook, Yahoo, etc., se agrupan bajo `generico`.
+- **Procesamiento programado**: ejecucion automatica diaria a la hora que elijas.
+- **Panel de control interactivo**: interfaz Material Design integrada con configuracion, ejecucion y estadisticas.
+- **Estadisticas con graficos**: contadores, grafico de barras de los dominios mas frecuentes y exportacion a CSV.
+- **Seguridad XSS**: la interfaz usa metodos DOM seguros (`textContent`, `createElement`) en vez de `innerHTML` para todo contenido dinamico.
 
-## Novedades en v0.4
+## Novedades en v0.5
 
-### Mejoras de rendimiento
-- Arquitectura modular: Código reorganizado en módulos especializados para mejor mantenimiento
-- Caché de etiquetas: Reduce llamadas redundantes a la API de Gmail
-- Procesamiento por lotes: Aplica múltiples etiquetas de forma más eficiente
-- Control de tiempo: Previene timeouts en cuentas con mucho correo
+### Correccion de etiquetado de subdominios
 
-### Nuevas características
-- Subdominios personalizables: Define qué subdominios ignorar (por defecto: `e`, `mail`, `info`, `news`, `noreply`, etc.)
-- Vista previa de procesamiento: Previsualiza qué correos se procesarían sin ejecutar
-- Soporte para no leídos: Opción de procesar correos no leídos
-- Sistema de logging: Registro estructurado con niveles (DEBUG, INFO, WARN, ERROR, CRITICAL)
-- Validación mejorada: Validación robusta de dominios y configuración
+El cambio mas importante de esta version. En v0.4, el metodo `getLabelName` tomaba la primera parte del dominio como nombre de etiqueta, lo que producia resultados incorrectos:
 
-### Mejoras técnicas
-- Validación de entrada: Todos los campos se validan antes de guardar
-- Sanitización automática: Nombres de etiquetas se limpian automáticamente
-- Estadísticas ampliadas: Contador de errores, fecha de primera ejecución
-- Exportación mejorada: CSV con más información y permisos configurables
-- Mejor feedback: Mensajes más descriptivos y tiempo de ejecución mostrado
+| Correo | v0.4 (incorrecto) | v0.5 (correcto) |
+|--------|-------------------|-----------------|
+| `user@newsletter.amazon.com` | `newsletter` | `amazon` |
+| `user@shop.example.co.uk` | `shop` | `example` |
+| `user@mail.github.com` | `mail` | `github` |
+| `user@noreply.atlassian.com` | `noreply` | `atlassian` |
 
-### Correcciones
-- Corregido error de tipeo en `Sidebar.html` (línea 131)
-- Mejor manejo de errores en todas las operaciones
-- Logging consistente usando `Logger.log`
+El nuevo algoritmo extrae el dominio registrable trabajando desde la derecha y detecta segundos niveles de pais (`.co.uk`, `.com.br`, `.gob.es`, etc.) mediante la constante `COUNTRY_SLDS`.
 
-## Instalación
+### Correccion de processUnreadEmails
 
-Para instalar OEG v0.4, sigue estos pasos:
+La funcion `processUnreadEmails` tenia un bug que impedia que etiquetara nada: el metodo `_processThreadBatch` incluia un check `if (!firstMessage.isUnread())` que filtraba los correos no leidos que la propia consulta habia buscado. Eliminado.
 
-1.  **Accede a Google Apps Script**: Ve a [script.google.com](https://script.google.com/) y haz clic en **Nuevo proyecto**.
+### Limite de domainStats
 
-2.  **Crea los archivos .gs**:
-    -   En el editor, crea los siguientes archivos de script (haz clic en `+` > **Secuencia de comandos**):
-        -   `Code.gs` - Punto de entrada principal
-        -   `Config.gs` - Gestión de configuración
-        -   `LabelManager.gs` - Gestión de etiquetas
-        -   `EmailProcessor.gs` - Procesamiento de correos
-        -   `Statistics.gs` - Gestión de estadísticas
-        -   `Logger.gs` - Sistema de logging
-    -   Copia el contenido de cada archivo desde este repositorio.
+`PropertiesService` tiene un tope de 9 KB por propiedad. Con miles de dominios unicos, el JSON de estadisticas podia superar ese limite y fallar silenciosamente. Ahora se recorta a los 500 dominios mas frecuentes.
 
-3.  **Crea los archivos HTML**:
-    -   En el editor, haz clic en `+` > **HTML** para crear los siguientes archivos:
-        -   `Sidebar.html` - Interfaz de usuario
-        -   `Script.html` - Código JavaScript del cliente
-        -   `Styles.html` - Estilos CSS
-    -   Copia el contenido de los archivos correspondientes de este repositorio.
+### Seguridad frontend (XSS)
 
-4.  **Guarda el Proyecto**: Haz clic en el icono de guardar 💾 y dale un nombre descriptivo, como "OEG - Organizador Gmail v0.4".
+- `updateDomainTags` usaba `innerHTML` para inyectar dominios directamente, lo que permitia ejecutar scripts arbitrarios. Ahora usa `textContent` y `createElement`.
+- `showStatus` reconstruido con metodos DOM seguros (`showStatusSafe`).
+- Funcion `escapeHtml()` disponible como capa de defensa adicional.
+- Todos los `onclick` inline eliminados del HTML; listeners centralizados en `bindEventListeners()`.
 
-5.  **Ejecuta la Inicialización**:
-    -   Selecciona la función `onOpen` en el menú desplegable de funciones.
-    -   Haz clic en **Ejecutar**.
-    -   Se te pedirá que autorices los permisos necesarios. Revisa y acepta para continuar.
+### Mejoras de UI
 
-Una vez completado, el script estará activo en tu cuenta.
+- **Tooltip de subdominios dinamico**: se genera desde la configuracion cargada, eliminando la duplicacion con `Config.gs`.
+- **Selector de hora generado por JS**: las 24 opciones se crean programaticamente.
+- **Enter en el campo de dominio**: pulsar Enter anade el dominio sin necesidad de hacer clic.
+- **Debounce en botones**: todos los botones de accion se deshabilitan durante la operacion para evitar doble clic.
+- **Skeleton de carga**: las tarjetas de estadisticas muestran un efecto de carga animado hasta que llegan los datos.
+- **Estados vacios con guia**: los bloques sin datos muestran texto orientativo en vez de un simple "No hay datos".
+- **Footer con clase CSS**: sustituye los estilos inline del footer original.
+- **Barras del grafico**: ancho minimo de 80px y `text-overflow: ellipsis` para evitar que el texto se solape.
+- **Shimmer eliminado**: la animacion infinita de las barras del grafico se ha eliminado.
+
+### Limpieza de codigo
+
+- **Patron Singleton eliminado**: no aporta nada en Google Apps Script, donde cada invocacion crea un nuevo aislamiento V8.
+- **`_isValidDomain` unificado**: la funcion duplicada en `ConfigManager` y `LabelManager` se ha extraido a una global `isValidDomain()` en Config.gs.
+- **`getLabelStats` eliminado**: llamaba a `label.getThreads()` por cada etiqueta del usuario (problema N+1). Con cientos de etiquetas podia agotar el tiempo de ejecucion. Nunca se usaba desde el frontend.
+- **`Logger.gs` simplificado**: la clase `AppLogger` (260 lineas de codigo muerto que nunca se invocaba) se ha sustituido por 3 funciones utiles: `persistLog`, `getAppLogs`, `clearAppLogs`.
+- **`saveConfig` devuelve errores**: el wrapper ahora devuelve `{ success, errors }` en vez de un booleano, permitiendo que la UI muestre los errores de validacion concretos.
+- **`GmailApp.getUi()` eliminado**: no existe en la API de Gmail standalone; el fallback en `onOpen` se ha simplificado.
+- **Fechas con zero-padding**: las queries de busqueda ahora usan `01/05` en vez de `1/5`.
+
+## Instalacion
+
+### Opcion A: con clasp (recomendada)
+
+[clasp](https://github.com/nicedoc/clasp) es la CLI oficial de Google Apps Script. Permite gestionar el proyecto desde la terminal.
+
+```bash
+# 1. Instalar clasp si no lo tienes
+npm install -g @google/clasp
+
+# 2. Autenticarse con tu cuenta de Google
+clasp login
+
+# 3. Clonar este repositorio
+git clone https://github.com/686f6c61/organizador-etiquetas-gmail-google-script.git
+cd organizador-etiquetas-gmail-google-script
+
+# 4. Crear el proyecto en Google Apps Script
+clasp create --title "OEG - Organizador etiquetas Gmail" --type standalone
+
+# 5. Subir los archivos
+clasp push --force
+```
+
+Despues, abre el editor con la URL que te indica clasp, implementa como aplicacion web y autoriza los permisos.
+
+### Opcion B: manual
+
+1. Ve a [script.google.com](https://script.google.com/) y crea un **Nuevo proyecto**.
+2. Crea los archivos `.gs` (`Code.gs`, `Config.gs`, `LabelManager.gs`, `EmailProcessor.gs`, `Statistics.gs`, `Logger.gs`) y copia el contenido desde este repositorio.
+3. Crea los archivos `.html` (`Sidebar.html`, `Script.html`, `Styles.html`) y copia el contenido.
+4. Guarda el proyecto.
+5. Ve a **Implementar > Nueva implementacion > Aplicacion web**, configura "Ejecutar como: yo" y "Acceso: solo yo", e implementa.
+6. Autoriza los permisos cuando te los pida.
 
 ## Uso
 
-1.  **Abre Gmail**: Ve a [gmail.com](https://gmail.com).
-2.  **Accede al Panel de Control**:
-    -   Busca el nuevo menú **OEG** en la barra de menú superior de Gmail.
-    -   Haz clic en `OEG` > `Abrir panel de control`.
-3.  **Utiliza la Interfaz**:
-    -   El panel de control aparecerá en la barra lateral derecha.
-    -   Desde aquí, puedes ejecutar el script manualmente, ajustar la configuración y ver las estadísticas.
+1. Abre la URL de la aplicacion web que te ha dado el despliegue.
+2. La interfaz muestra tres secciones: ejecucion, configuracion y estadisticas.
+3. Pulsa **Procesar correos ahora** para una ejecucion manual.
+4. Activa el procesamiento automatico si quieres que se ejecute diariamente.
+
+Si prefieres usarlo como sidebar en Google Sheets:
+
+1. Abre una hoja de calculo de Google Sheets.
+2. En el editor de Apps Script del spreadsheet, copia los archivos del proyecto.
+3. Recarga la hoja: aparecera el menu **OEG > Abrir panel de control**.
 
 ![Ejecutar script y ver resultados](img/start.png)
 
-## Configuración detallada
+## Configuracion detallada
 
 ### Opciones de procesamiento
--   **Máximo de correos a procesar**: Define el número de hilos de correo que se analizarán en cada ejecución (rango: 10-500).
--   **Días hacia atrás**: Limita el análisis a un período de tiempo específico (1, 3, 7, 15, 30 días) o selecciona `Todos` para un análisis completo.
 
-### Procesamiento automático
--   **Activar/Desactivar**: Marca la casilla para que el script se ejecute automáticamente todos los días.
--   **Hora de ejecución**: Selecciona la hora del día (formato 24h) para el procesamiento automático.
+- **Maximo de correos**: numero de hilos a analizar por ejecucion (10-500).
+- **Dias hacia atras**: periodo de busqueda (1, 3, 7, 15, 30 dias o Todos).
 
-### Gestión de dominios
--   **Evitar subdominios**: Activa esta opción para que el script ignore los subdominios definidos en la lista (ej. `support@github.com` se convierte en etiqueta `github`).
-    -   El script incluye **42 subdominios comunes** predefinidos
-    -   Haz clic en el icono ℹ️ junto al título para ver la lista completa
--   **Dominios genéricos**: Administra la lista de dominios que se agruparán bajo la etiqueta `generico`.
+### Procesamiento automatico
 
-#### Subdominios ignorados por defecto (42)
+- **Procesar diariamente**: activa un trigger que ejecuta el script cada dia.
+- **Hora del dia**: hora de ejecucion en formato 24h.
 
-El script viene con una lista completa de subdominios comunes que se ignoran automáticamente:
+### Gestion de subdominios
 
-**Notificaciones y correos automáticos:**
-`e`, `mail`, `email`, `noreply`, `no-reply`, `donotreply`, `notify`, `notifications`, `alerts`, `updates`, `newsletter`
+- **Extraer dominio principal**: cuando esta activado (por defecto en v0.5), el script extrae el dominio registrable desde la derecha. Esto significa que `newsletter.amazon.com`, `shop.amazon.com` y `noreply.amazon.com` generan todos la etiqueta `amazon`.
+- El algoritmo detecta automaticamente TLD de pais compuestos: `shop.example.co.uk` genera `example`, no `shop` ni `co`.
+- Con esta opcion desactivada, se usa la primera parte del dominio tal cual (comportamiento legacy de v0.4).
 
-**Marketing y promociones:**
-`marketing`, `promo`, `promos`, `offers`, `deals`, `news`
+### Dominios genericos
 
-**Soporte y servicio:**
-`support`, `help`, `service`, `customerservice`, `contact`
+Los correos de estos dominios se agrupan bajo la etiqueta `generico`. La lista por defecto incluye:
 
-**Técnicos:**
-`www`, `webmail`, `smtp`, `imap`, `pop`, `mx`, `mx1`, `mx2`, `bounce`, `mailer`, `sender`
+`gmail.com`, `outlook.com`, `yahoo.com`, `hotmail.com`, `icloud.com`, `aol.com`, `protonmail.com`, `mail.com`, `zoho.com`, `yandex.com`, `gmx.com`, `live.com`, `msn.com`, `me.com`, `mac.com`
 
-**Sistema:**
-`system`, `automated`, `auto`, `admin`, `team`
+Puedes anadir o quitar dominios desde la interfaz.
 
-**Cuentas:**
-`accounts`, `account`, `billing`, `invoice`, `receipts`
+### Subdominios ignorados (referencia)
 
-**Bienvenida:**
-`hello`, `hi`, `welcome`, `info`
+El script incluye 42 subdominios comunes predefinidos. Con la opcion "Extraer dominio principal" activada, estos subdominios ya no son necesarios para el etiquetado (el algoritmo extrae el dominio correcto independientemente), pero se mantienen como referencia y se muestran en el tooltip informativo de la interfaz.
 
-#### Cómo añadir subdominios personalizados
+**Notificaciones:** `e`, `mail`, `email`, `noreply`, `no-reply`, `donotreply`, `notify`, `notifications`, `alerts`, `updates`, `newsletter`
 
-Si necesitas añadir tus propios subdominios a la lista:
+**Marketing:** `marketing`, `promo`, `promos`, `offers`, `deals`, `news`
 
-1. **Edita localmente con clasp** (recomendado):
-   ```bash
-   # Edita el archivo Config.gs líneas 47-56
-   # Añade tus subdominios al array ignoredSubdomains
-   clasp push --force
-   ```
+**Soporte:** `support`, `help`, `service`, `customerservice`, `contact`
 
-2. **Edita directamente en Apps Script**:
-   - Abre tu proyecto en [script.google.com](https://script.google.com)
-   - Abre el archivo `Config.gs`
-   - Busca el array `ignoredSubdomains` (línea 47)
-   - Añade tus subdominios entre comillas y separados por comas
-   - Ejemplo: `'custom', 'mysubdomain', 'test'`
-   - Guarda el proyecto
+**Tecnicos:** `www`, `webmail`, `smtp`, `imap`, `pop`, `mx`, `mx1`, `mx2`, `bounce`, `mailer`, `sender`
 
-**Ejemplo de personalización:**
-```javascript
-ignoredSubdomains: [
-  'e', 'mail', 'info', // ... subdominios por defecto
-  'custom', 'mycompany', 'internal' // tus subdominios personalizados
-]
-```
+**Sistema:** `system`, `automated`, `auto`, `admin`, `team`
 
-## Estadísticas y visualización
+**Cuentas:** `accounts`, `account`, `billing`, `invoice`, `receipts`
 
-El panel de estadísticas ofrece una visión clara del trabajo que OEG está haciendo por ti.
+**Bienvenida:** `hello`, `hi`, `welcome`, `info`
 
--   **Contadores**: `Total procesados`, `Total etiquetados` y `Última ejecución`.
--   **Gráfico de dominios**: Un gráfico de barras que muestra los 5 dominios más frecuentes.
--   **Top dominios**: Una lista detallada de los dominios con más correos.
--   **Acciones**:
-    -   **Abrir en Spreadsheet**: Exporta los datos de dominios a un archivo CSV en tu Google Drive.
-    -   **Limpiar**: Reinicia todas las estadísticas a cero.
+## Estadisticas y visualizacion
 
-![Panel de Estadísticas](img/estadisticas.png)
+El panel de estadisticas muestra:
 
-## Arquitectura técnica
+- **Contadores**: total de correos procesados, etiquetados y fecha de ultima ejecucion.
+- **Grafico de barras**: los 5 dominios con mas correos.
+- **Top dominios**: lista de los 10 dominios mas frecuentes.
+- **Exportar CSV**: genera un archivo CSV en Google Drive con todas las estadisticas por dominio.
+- **Limpiar estadisticas**: reinicia todos los contadores a cero.
 
-### Filosofía de diseño
+Las estadisticas por dominio se limitan a 500 entradas para no exceder el limite de 9 KB de PropertiesService. Se conservan siempre los dominios mas frecuentes.
 
-El código de la v0.4 ha sido completamente refactorizado siguiendo los principios de **Separación de Responsabilidades** (Separation of Concerns) y **Modularidad**. La arquitectura aplicada se basa en:
+![Panel de Estadisticas](img/estadisticas.png)
 
-#### Principios aplicados
+## Arquitectura tecnica
 
-1. **Patrón Singleton**: Utilizado en `ConfigManager`, `LabelManager` y `AppLogger` para garantizar una única instancia global y evitar conflictos de estado.
+### Modulos backend (.gs)
 
-2. **Capa de abstracción**: Cada módulo expone funciones públicas que mantienen compatibilidad con la versión anterior, mientras que la implementación interna usa clases orientadas a objetos.
+| Archivo | Responsabilidad |
+|---------|----------------|
+| `Code.gs` | Punto de entrada: `doGet()`, `onOpen()`, `showSidebar()`, `updateTrigger()` |
+| `Config.gs` | Gestion de configuracion, validacion, migracion de esquemas, constantes globales (`COUNTRY_SLDS`, `VALIDATION_LIMITS`, `isValidDomain()`) |
+| `LabelManager.gs` | Extraccion de dominios, resolucion de etiquetas con soporte de TLD de pais, cache en memoria, aplicacion por lotes |
+| `EmailProcessor.gs` | Procesamiento de correos leidos y no leidos, control de timeout (4.5 min), vista previa |
+| `Statistics.gs` | Estadisticas acumuladas, recorte de domainStats a 500 entradas, exportacion CSV |
+| `Logger.gs` | Funciones de logging persistente para diagnosticar ejecuciones automaticas |
 
-3. **Caché y optimización**: Implementación de caché en `LabelManager` para reducir llamadas a la API de Gmail, siguiendo el principio de minimizar operaciones costosas.
+### Modulos frontend (.html)
 
-4. **Validación en capas**: Validación tanto en el cliente (JavaScript) como en el servidor (Apps Script) para garantizar integridad de datos.
+| Archivo | Responsabilidad |
+|---------|----------------|
+| `Sidebar.html` | Estructura HTML con placeholders para contenido dinamico |
+| `Script.html` | Logica del cliente: carga de datos, validacion, eventos, renderizado seguro (DOM methods) |
+| `Styles.html` | Estilos CSS Material Design con variables, animaciones y estados de carga |
 
-5. **Logging estructurado**: Sistema de logging con niveles para facilitar debugging y monitoreo sin afectar rendimiento.
+### Principios de diseno
 
-### Módulos backend (.gs)
-
--   **`Code.gs`**: Punto de entrada principal y funciones de interfaz de usuario (menús, sidebar)
--   **`Config.gs`**: Gestión centralizada de configuración con validación y migración de esquemas
-    -   Clase `ConfigManager` con patrón singleton
-    -   Validación robusta de parámetros
-    -   Sistema de versiones para futuras migraciones
--   **`LabelManager.gs`**: Gestión de etiquetas de Gmail
-    -   Caché de etiquetas para optimización
-    -   Extracción y validación de dominios
-    -   Sanitización de nombres de etiquetas
-    -   Procesamiento por lotes
--   **`EmailProcessor.gs`**: Procesamiento de correos electrónicos
-    -   Control de tiempo de ejecución
-    -   Construcción optimizada de queries
-    -   Vista previa de procesamiento
-    -   Soporte para correos no leídos
--   **`Statistics.gs`**: Gestión de estadísticas
-    -   Obtención, actualización y limpieza de datos
-    -   Exportación a CSV con permisos configurables
-    -   Resúmenes estadísticos
--   **`Logger.gs`**: Sistema de logging estructurado
-    -   Niveles: DEBUG, INFO, WARN, ERROR, CRITICAL
-    -   Persistencia opcional
-    -   Exportación de logs
-
-### Módulos frontend (.html)
-
--   **`Sidebar.html`**: Estructura HTML de la interfaz de usuario
--   **`Script.html`**: Código JavaScript del cliente (lógica de interacción)
--   **`Styles.html`**: Estilos CSS para la interfaz
+- **Validacion en dos capas**: el cliente valida antes de enviar; el servidor valida antes de guardar.
+- **Seguridad por defecto**: contenido dinamico via `textContent` y `createElement`; cero `innerHTML` con datos de usuario.
+- **Limites defensivos**: recorte de domainStats, timeout de ejecucion, sanitizacion de nombres de etiqueta.
+- **Sin estado entre ejecuciones**: cada invocacion de Apps Script crea un nuevo aislamiento V8, por lo que no se usan patrones que asuman persistencia en memoria (singleton, cache global).
 
 ### Almacenamiento
 
-El script utiliza `PropertiesService` de Google Apps Script para almacenar:
--   Configuración del usuario
--   Estadísticas de procesamiento
--   Logs del sistema (opcional)
+El script usa `PropertiesService.getUserProperties()` para guardar:
+
+- Configuracion del usuario (dominios genericos, opciones de procesamiento)
+- Estadisticas acumuladas (totales, estadisticas por dominio)
+- Logs persistidos (opcional, para diagnosticar triggers)
 
 ## Permisos requeridos
 
-Para funcionar correctamente, el script necesita los siguientes permisos de tu cuenta de Google:
--   **Leer y modificar tu correo de Gmail**: Para analizar los mensajes y aplicar etiquetas.
--   **Ejecutar como tú**: Para que los triggers automáticos funcionen.
--   **Mostrar una interfaz de usuario personalizada**: Para renderizar el panel de control en Gmail.
--   **Crear y gestionar archivos en Google Drive**: Para la funcionalidad de exportación a CSV.
+| Permiso | Motivo |
+|---------|--------|
+| `gmail.modify` | Leer mensajes y aplicar etiquetas |
+| `gmail.labels` | Crear y gestionar etiquetas |
+| `drive.file` | Exportar estadisticas a CSV |
+| `script.scriptapp` | Crear triggers para ejecucion automatica |
+| `userinfo.email` | Identificar la cuenta del usuario |
 
 ## Limitaciones
 
--   El script solo procesa correos que ya han sido **leídos**.
--   Está sujeto a las [cuotas y limitaciones de Google Apps Script](https://developers.google.com/apps-script/guides/services/quotas). Un uso intensivo en cuentas con un volumen de correo muy alto podría alcanzar estos límites.
--   El procesamiento inicial en una bandeja de entrada muy grande puede tardar varios minutos.
+- Solo procesa correos **leidos** por defecto (existe `processUnreadEmails` para no leidos).
+- Sujeto a las [cuotas de Google Apps Script](https://developers.google.com/apps-script/guides/services/quotas): limite de 6 minutos por ejecucion, cuota diaria de llamadas a la API.
+- El procesamiento inicial en bandejas muy grandes puede requerir varias ejecuciones; el script se detiene automaticamente antes del timeout y puede reanudarse.
+- Las estadisticas por dominio se limitan a 500 entradas por restricciones de almacenamiento.
 
-## Solución de problemas
+## Solucion de problemas
 
--   **El menú "OEG" no aparece en Gmail**: Refresca la página de Gmail. Si persiste, asegúrate de haber ejecutado la función `onOpen` correctamente durante la instalación.
--   **El script falla durante la ejecución**: Revisa los registros de ejecución en el editor de Google Apps Script (`Ver` > `Ejecuciones`) para identificar el error. Usa la función `getAppLogs()` para ver logs detallados.
--   **Problemas de permisos**: Si encuentras errores de autorización, intenta ejecutar de nuevo la función `onOpen` para volver a lanzar el diálogo de permisos.
--   **Error de validación al guardar configuración**: Verifica que todos los valores estén dentro de los rangos permitidos (maxEmails: 10-500, processHour: 0-23, daysBack: -1 a 365).
--   **El procesamiento se detiene antes de terminar**: Esto es normal en cuentas con mucho correo. El script se detiene antes del timeout. Ejecuta nuevamente para continuar procesando.
--   **Dominios no válidos**: Asegúrate de que los dominios tengan el formato correcto (ej: `example.com`, no `www.example.com` ni `https://example.com`).
+| Problema | Solucion |
+|----------|---------|
+| El menu OEG no aparece en Gmail | OEG funciona como webapp independiente o sidebar en Sheets; en Gmail puro, usa la URL de la implementacion |
+| El script falla durante la ejecucion | Revisa los logs en el editor de Apps Script (`Ver > Ejecuciones`) o usa `getAppLogs()` |
+| Error de validacion al guardar | Verifica que los valores esten dentro de los rangos: maxEmails (10-500), processHour (0-23), daysBack (-1 a 365) |
+| El procesamiento se detiene antes de terminar | Normal en cuentas con mucho correo; el script respeta el limite de 4.5 min. Ejecuta de nuevo para continuar |
+| Dominios no validos | Usar formato `example.com`, sin `www.`, `https://` ni barras |
+| Subdominios generan etiquetas incorrectas | Asegurate de que "Extraer dominio principal" este activado en la configuracion |
 
-## Migración desde v0.3
+## Migracion desde v0.4
 
-Si ya tienes instalada la versión 0.3, sigue estos pasos para actualizar:
+1. **Sustituye todos los archivos** del proyecto con los de la v0.5 (los 6 `.gs` y los 3 `.html`).
+2. **Migracion automatica**: al cargar la configuracion, el script detecta la version 1.0 del esquema y migra a 1.1, activando `avoidSubdomains` por defecto.
+3. **Sin perdida de datos**: las estadisticas y la configuracion existente se preservan.
+4. **Verifica**: abre la interfaz y comprueba que "Extraer dominio principal" este marcado.
 
-1.  **Crea los nuevos archivos**: Añade `Config.gs`, `LabelManager.gs`, `EmailProcessor.gs` y `Logger.gs` a tu proyecto.
+### Cambios que rompen compatibilidad
 
-2.  **Actualiza los archivos existentes**:
-    -   Reemplaza el contenido de `Code.gs`, `Statistics.gs`, `Sidebar.html` y `Script.html` con las versiones nuevas.
+- `saveConfig()` ahora devuelve `{ success: boolean, errors: string[] }` en vez de un booleano. Si tienes codigo personalizado que llama a esta funcion, adapta la lectura del resultado.
+- `getLabelStats()` y `getAllLabels()` se han eliminado de `LabelManager.gs`. Si los usabas desde codigo externo, puedes llamar directamente a `GmailApp.getUserLabels()`.
 
-3.  **Migración automática**:
-    -   La configuración existente se migrará automáticamente al nuevo formato.
-    -   Las estadísticas se preservan y se complementan con nuevos campos.
-    -   Los triggers automáticos se recrean si estaban activos.
+## Como contribuir
 
-4.  **Verifica la instalación**:
-    -   Ejecuta la función `onOpen` para inicializar.
-    -   Abre el panel de control en Gmail y verifica que todo funcione.
+Las contribuciones son bienvenidas. Abre un issue o envia un pull request.
 
-### Notas importantes
--   Compatible con v0.3: No se pierde configuración ni estadísticas
--   Sin cambios en la UI: La interfaz de usuario es la misma
--   Nuevas funciones disponibles: Validación mejorada, logging, etc.
+### Areas de mejora sugeridas
 
-## Cómo contribuir
-
-Las contribuciones son bienvenidas. Si tienes ideas para nuevas funcionalidades, mejoras o has encontrado un error, por favor, abre un *issue* o envía un *pull request*.
-
-### Áreas de mejora sugeridas
--   Tests unitarios para funciones críticas
--   Modo simulación (previsualizar sin ejecutar)
--   Reglas personalizadas de etiquetado
--   Dashboard avanzado con gráficos temporales
--   Integración en tiempo real con Google Sheets
+- Tests unitarios para funciones criticas
+- Reglas personalizadas de etiquetado (no solo por dominio)
+- Dashboard avanzado con graficos temporales
+- Soporte para etiquetas anidadas (ej. `dominios/amazon`)
+- Deteccion automatica de TLD de pais sin lista fija
 
 ---
 
-**Versión**: 0.4
-**Fecha de actualización**: 2025-11-17
+**Version**: 0.5
+**Fecha de actualizacion**: 2025-02-27
 **Autor**: 686f6c61 - [@hex686f6c61](https://x.com/hex686f6c61)

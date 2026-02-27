@@ -1,13 +1,13 @@
 /**
  * @file Config.gs
- * @description Módulo centralizado para la gestión de configuración del script.
- *              Separa la lógica de configuración del resto del código.
+ * @description Modulo centralizado para la gestion de configuracion del script.
+ *              Incluye validacion, valores por defecto y migracion de versiones.
  * @author 686f6c61
- * @version 0.4
+ * @version 0.5
  * @date 2025-11-17
  */
 
-// --- Constantes Globales de Propiedades ---
+// --- Constantes globales de propiedades ---
 const PROP_GENERIC_DOMAINS = 'genericDomains';
 const PROP_MAX_EMAILS = 'maxEmails';
 const PROP_DAYS_BACK = 'daysBack';
@@ -17,33 +17,20 @@ const PROP_AVOID_SUBDOMAINS = 'avoidSubdomains';
 const PROP_IGNORED_SUBDOMAINS = 'ignoredSubdomains';
 const PROP_CONFIG_VERSION = 'configVersion';
 
-// Versión actual del esquema de configuración
-const CONFIG_SCHEMA_VERSION = '1.0';
+const CONFIG_SCHEMA_VERSION = '1.1';
 
-// Valores por defecto
 const DEFAULT_CONFIG = {
   genericDomains: [
-    'gmail.com',
-    'outlook.com',
-    'yahoo.com',
-    'hotmail.com',
-    'icloud.com',
-    'aol.com',
-    'protonmail.com',
-    'mail.com',
-    'zoho.com',
-    'yandex.com',
-    'gmx.com',
-    'live.com',
-    'msn.com',
-    'me.com',
-    'mac.com'
+    'gmail.com', 'outlook.com', 'yahoo.com', 'hotmail.com',
+    'icloud.com', 'aol.com', 'protonmail.com', 'mail.com',
+    'zoho.com', 'yandex.com', 'gmx.com', 'live.com',
+    'msn.com', 'me.com', 'mac.com'
   ],
   maxEmails: 100,
   daysBack: 7,
   autoProcess: false,
   processHour: 8,
-  avoidSubdomains: false,
+  avoidSubdomains: true,
   ignoredSubdomains: [
     'e', 'mail', 'info', 'news', 'noreply', 'no-reply', 'newsletter',
     'support', 'help', 'notify', 'notifications', 'alerts', 'email',
@@ -56,7 +43,6 @@ const DEFAULT_CONFIG = {
   ]
 };
 
-// Límites de validación
 const VALIDATION_LIMITS = {
   maxEmails: { min: 10, max: 500 },
   processHour: { min: 0, max: 23 },
@@ -66,36 +52,60 @@ const VALIDATION_LIMITS = {
 };
 
 /**
- * @description Singleton para gestionar la configuración del script.
+ * Segundos niveles de dominio habituales en TLD de pais.
+ * Permiten distinguir "example" en "example.co.uk" (SLD compuesto)
+ * frente a "example" en "sub.example.com" (SLD simple).
+ */
+const COUNTRY_SLDS = [
+  'co', 'com', 'net', 'org', 'edu', 'gov',
+  'ac', 'go', 'gob', 'nic', 'or', 'ne'
+];
+
+/**
+ * @description Valida si un dominio tiene formato correcto segun RFC.
+ *              Funcion compartida por ConfigManager y LabelManager para evitar duplicacion.
+ * @param {string} domain - Dominio a validar
+ * @returns {boolean} true si el formato es valido
+ */
+function isValidDomain(domain) {
+  if (!domain || typeof domain !== 'string') return false;
+  if (domain.length > VALIDATION_LIMITS.maxDomainLength) return false;
+  return /^([a-z0-9]+(-[a-z0-9]+)*\.)+[a-z]{2,}$/i.test(domain);
+}
+
+/**
+ * @description Gestor centralizado de configuracion con validacion y migracion.
  */
 class ConfigManager {
   constructor() {
-    if (ConfigManager.instance) {
-      return ConfigManager.instance;
-    }
     this.properties = PropertiesService.getUserProperties();
-    ConfigManager.instance = this;
   }
 
   /**
    * @description Inicializa las propiedades con valores por defecto si no existen.
-   *              También maneja la migración de versiones antiguas.
-   * @returns {Boolean} true si se inicializó correctamente
+   *              Gestiona la migracion desde versiones anteriores.
+   * @returns {boolean} true si se inicializo correctamente
    */
   initProperties() {
     try {
       const version = this.properties.getProperty(PROP_CONFIG_VERSION);
 
-      // Si no hay versión, es una instalación nueva o antigua
       if (!version) {
         this._setDefaultProperties();
         this.properties.setProperty(PROP_CONFIG_VERSION, CONFIG_SCHEMA_VERSION);
-        Logger.log('Configuración inicializada con valores por defecto');
+        Logger.log('Configuracion inicializada con valores por defecto');
         return true;
       }
 
-      // Aquí se pueden añadir migraciones futuras
-      // if (version < '2.0') { migrate(); }
+      // Migracion 1.0 -> 1.1: avoidSubdomains pasa a true por defecto
+      if (version === '1.0') {
+        const current = this.properties.getProperty(PROP_AVOID_SUBDOMAINS);
+        if (current === null) {
+          this.properties.setProperty(PROP_AVOID_SUBDOMAINS, 'true');
+        }
+        this.properties.setProperty(PROP_CONFIG_VERSION, CONFIG_SCHEMA_VERSION);
+        Logger.log('Migracion 1.0 -> 1.1 completada');
+      }
 
       return true;
     } catch (e) {
@@ -104,10 +114,7 @@ class ConfigManager {
     }
   }
 
-  /**
-   * @description Establece los valores por defecto en las propiedades.
-   * @private
-   */
+  /** @private */
   _setDefaultProperties() {
     Object.keys(DEFAULT_CONFIG).forEach(key => {
       const propKey = this._getPropKey(key);
@@ -121,12 +128,7 @@ class ConfigManager {
     });
   }
 
-  /**
-   * @description Convierte el nombre de configuración a la clave de propiedad.
-   * @private
-   * @param {String} key - Nombre de la configuración
-   * @returns {String} Clave de propiedad
-   */
+  /** @private */
   _getPropKey(key) {
     const keyMap = {
       genericDomains: PROP_GENERIC_DOMAINS,
@@ -141,8 +143,8 @@ class ConfigManager {
   }
 
   /**
-   * @description Obtiene la configuración actual del script.
-   * @returns {Object} Objeto con toda la configuración
+   * @description Obtiene la configuracion actual del script.
+   * @returns {Object} Objeto con toda la configuracion
    */
   getConfig() {
     this.initProperties();
@@ -154,93 +156,72 @@ class ConfigManager {
         daysBack: parseInt(this.properties.getProperty(PROP_DAYS_BACK) || '7'),
         autoProcess: this.properties.getProperty(PROP_AUTO_PROCESS) === 'true',
         processHour: parseInt(this.properties.getProperty(PROP_PROCESS_HOUR) || '8'),
-        avoidSubdomains: this.properties.getProperty(PROP_AVOID_SUBDOMAINS) === 'true',
+        // Por defecto true: si la propiedad no existe o no es "false", se activa
+        avoidSubdomains: this.properties.getProperty(PROP_AVOID_SUBDOMAINS) !== 'false',
         ignoredSubdomains: JSON.parse(this.properties.getProperty(PROP_IGNORED_SUBDOMAINS) ||
           JSON.stringify(DEFAULT_CONFIG.ignoredSubdomains))
       };
     } catch (e) {
-      Logger.log('Error al obtener configuración: ' + e.toString());
+      Logger.log('Error al obtener configuracion: ' + e.toString());
       return DEFAULT_CONFIG;
     }
   }
 
   /**
-   * @description Valida la configuración proporcionada.
-   * @param {Object} config - Configuración a validar
+   * @description Valida la configuracion proporcionada.
+   * @param {Object} config - Configuracion a validar
    * @returns {Object} { valid: boolean, errors: string[] }
    */
   validateConfig(config) {
     const errors = [];
 
-    // Validar maxEmails
     if (config.maxEmails < VALIDATION_LIMITS.maxEmails.min ||
         config.maxEmails > VALIDATION_LIMITS.maxEmails.max) {
-      errors.push(`maxEmails debe estar entre ${VALIDATION_LIMITS.maxEmails.min} y ${VALIDATION_LIMITS.maxEmails.max}`);
+      errors.push('maxEmails debe estar entre ' +
+        VALIDATION_LIMITS.maxEmails.min + ' y ' + VALIDATION_LIMITS.maxEmails.max);
     }
 
-    // Validar processHour
     if (config.processHour < VALIDATION_LIMITS.processHour.min ||
         config.processHour > VALIDATION_LIMITS.processHour.max) {
-      errors.push(`processHour debe estar entre ${VALIDATION_LIMITS.processHour.min} y ${VALIDATION_LIMITS.processHour.max}`);
+      errors.push('processHour debe estar entre ' +
+        VALIDATION_LIMITS.processHour.min + ' y ' + VALIDATION_LIMITS.processHour.max);
     }
 
-    // Validar daysBack
     if (config.daysBack < VALIDATION_LIMITS.daysBack.min ||
         config.daysBack > VALIDATION_LIMITS.daysBack.max) {
-      errors.push(`daysBack debe estar entre ${VALIDATION_LIMITS.daysBack.min} y ${VALIDATION_LIMITS.daysBack.max}`);
+      errors.push('daysBack debe estar entre ' +
+        VALIDATION_LIMITS.daysBack.min + ' y ' + VALIDATION_LIMITS.daysBack.max);
     }
 
-    // Validar genericDomains
     if (!Array.isArray(config.genericDomains)) {
       errors.push('genericDomains debe ser un array');
     } else {
       config.genericDomains.forEach(domain => {
-        if (!this._isValidDomain(domain)) {
-          errors.push(`Dominio inválido: ${domain}`);
+        if (!isValidDomain(domain)) {
+          errors.push('Dominio invalido: ' + domain);
         }
       });
     }
 
-    // Validar ignoredSubdomains
     if (config.ignoredSubdomains && !Array.isArray(config.ignoredSubdomains)) {
       errors.push('ignoredSubdomains debe ser un array');
     }
 
-    return {
-      valid: errors.length === 0,
-      errors: errors
-    };
+    return { valid: errors.length === 0, errors: errors };
   }
 
   /**
-   * @description Valida si un dominio es válido.
-   * @private
-   * @param {String} domain - Dominio a validar
-   * @returns {Boolean} true si es válido
-   */
-  _isValidDomain(domain) {
-    if (!domain || typeof domain !== 'string') return false;
-    if (domain.length > VALIDATION_LIMITS.maxDomainLength) return false;
-
-    // Regex básico para validar dominios
-    const domainRegex = /^([a-z0-9]+(-[a-z0-9]+)*\.)+[a-z]{2,}$/i;
-    return domainRegex.test(domain);
-  }
-
-  /**
-   * @description Guarda la configuración después de validarla.
-   * @param {Object} config - Configuración a guardar
+   * @description Guarda la configuracion despues de validarla.
+   * @param {Object} config - Configuracion a guardar
    * @returns {Object} { success: boolean, errors: string[] }
    */
   saveConfig(config) {
     try {
-      // Validar configuración
       const validation = this.validateConfig(config);
       if (!validation.valid) {
         return { success: false, errors: validation.errors };
       }
 
-      // Guardar propiedades
       this.properties.setProperty(PROP_GENERIC_DOMAINS, JSON.stringify(config.genericDomains));
       this.properties.setProperty(PROP_MAX_EMAILS, config.maxEmails.toString());
       this.properties.setProperty(PROP_DAYS_BACK, config.daysBack.toString());
@@ -252,66 +233,59 @@ class ConfigManager {
         this.properties.setProperty(PROP_IGNORED_SUBDOMAINS, JSON.stringify(config.ignoredSubdomains));
       }
 
-      Logger.log('Configuración guardada correctamente');
+      Logger.log('Configuracion guardada correctamente');
       return { success: true, errors: [] };
     } catch (e) {
-      Logger.log('Error al guardar configuración: ' + e.toString());
+      Logger.log('Error al guardar configuracion: ' + e.toString());
       return { success: false, errors: [e.toString()] };
     }
   }
 
   /**
-   * @description Resetea la configuración a valores por defecto.
-   * @returns {Boolean} true si se reseteo correctamente
+   * @description Resetea la configuracion a valores por defecto.
+   * @returns {boolean} true si se reseteo correctamente
    */
   resetConfig() {
     try {
       Object.keys(DEFAULT_CONFIG).forEach(key => {
-        const propKey = this._getPropKey(key);
-        this.properties.deleteProperty(propKey);
+        this.properties.deleteProperty(this._getPropKey(key));
       });
       this._setDefaultProperties();
-      Logger.log('Configuración reseteada a valores por defecto');
+      Logger.log('Configuracion reseteada a valores por defecto');
       return true;
     } catch (e) {
-      Logger.log('Error al resetear configuración: ' + e.toString());
+      Logger.log('Error al resetear configuracion: ' + e.toString());
       return false;
     }
   }
 }
 
-// Funciones públicas para mantener compatibilidad con Code.gs
+// --- Funciones publicas ---
 
-/**
- * @description Inicializa las propiedades del script.
- */
 function initProperties() {
-  const configManager = new ConfigManager();
-  return configManager.initProperties();
+  return new ConfigManager().initProperties();
 }
 
 /**
- * @description Obtiene la configuración actual.
- * @returns {Object} Configuración actual
+ * @description Obtiene la configuracion actual.
+ * @returns {Object} Configuracion actual
  */
 function getConfig() {
-  const configManager = new ConfigManager();
-  return configManager.getConfig();
+  return new ConfigManager().getConfig();
 }
 
 /**
- * @description Guarda la configuración.
- * @param {Object} config - Configuración a guardar
- * @returns {Boolean} true si se guardó correctamente
+ * @description Guarda la configuracion y actualiza el trigger si procede.
+ *              Devuelve el resultado completo con errores de validacion.
+ * @param {Object} config - Configuracion a guardar
+ * @returns {Object} { success: boolean, errors: string[] }
  */
 function saveConfig(config) {
-  const configManager = new ConfigManager();
-  const result = configManager.saveConfig(config);
+  const result = new ConfigManager().saveConfig(config);
 
   if (result.success) {
-    // Actualizar trigger si es necesario
     updateTrigger(config.autoProcess, config.processHour);
   }
 
-  return result.success;
+  return result;
 }

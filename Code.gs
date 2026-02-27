@@ -1,21 +1,21 @@
 /**
  * @file Code.gs
- * @description Punto de entrada principal y funciones de UI para el organizador de etiquetas de Gmail.
- *              La lógica de negocio se ha modularizado en archivos separados.
+ * @description Punto de entrada principal y funciones de UI para el organizador
+ *              de etiquetas de Gmail. La logica de negocio esta en modulos separados.
  * @author 686f6c61
- * @version 0.4
+ * @version 0.5
  * @date 2025-11-17
  *
- * @requires Config.gs - Gestión de configuración
- * @requires LabelManager.gs - Gestión de etiquetas
+ * @requires Config.gs - Gestion de configuracion
+ * @requires LabelManager.gs - Gestion de etiquetas
  * @requires EmailProcessor.gs - Procesamiento de correos
- * @requires Statistics.gs - Gestión de estadísticas
+ * @requires Statistics.gs - Gestion de estadisticas
  */
 
 /**
- * @description Se ejecuta cuando el script se accede como una aplicación web. Sirve la interfaz de usuario principal.
- * @param {Object} e - Objeto de evento de Google Apps Script.
- * @returns {HtmlOutput} La interfaz de usuario renderizada desde 'Sidebar.html'.
+ * @description Sirve la interfaz de usuario cuando se accede como aplicacion web.
+ * @param {Object} e - Objeto de evento de Google Apps Script
+ * @returns {HtmlOutput} Interfaz renderizada desde 'Sidebar.html'
  */
 function doGet(e) {
   return HtmlService.createTemplateFromFile('Sidebar')
@@ -24,61 +24,47 @@ function doGet(e) {
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
-
 /**
- * @description Se ejecuta cuando un usuario abre un documento que contiene este script.
- *              Crea un menú personalizado en la UI de Google Sheets o Gmail para acceder al panel de control.
+ * @description Crea el menu personalizado al abrir el documento contenedor.
+ *              Compatible con Google Sheets; Gmail standalone usa doGet().
  */
 function onOpen() {
   try {
-    const ui = SpreadsheetApp.getUi();
-    ui.createMenu('OEG')
+    SpreadsheetApp.getUi()
+      .createMenu('OEG')
       .addItem('Abrir panel de control', 'showSidebar')
       .addToUi();
   } catch (e) {
-    // Probablemente se está ejecutando desde Gmail, no desde Sheets
-    try {
-      const ui = GmailApp.getUi();
-      ui.createMenu('OEG')
-        .addItem('Abrir panel de control', 'showSidebar')
-        .addToUi();
-    } catch (error) {
-      Logger.log('Error al crear menú: ' + error.toString());
-    }
+    // Si no estamos en Sheets (p.ej. ejecutando como webapp), ignorar
+    Logger.log('onOpen: no se pudo crear menu (contexto no soportado)');
   }
 }
 
 /**
- * @description Muestra el panel lateral (sidebar) con la interfaz de usuario principal.
- *              Es compatible tanto con Google Sheets como con Gmail.
+ * @description Muestra el panel lateral con la interfaz de usuario.
  */
 function showSidebar() {
-  const html = HtmlService.createHtmlOutputFromFile('Sidebar')
+  const html = HtmlService.createTemplateFromFile('Sidebar')
+    .evaluate()
     .setTitle('OEG - Organizador etiquetas Gmail')
     .setWidth(350);
 
   try {
     SpreadsheetApp.getUi().showSidebar(html);
   } catch (e) {
-    try {
-      GmailApp.getUi().showSidebar(html);
-    } catch (error) {
-      Logger.log('Error al mostrar sidebar: ' + error.toString());
-    }
+    Logger.log('showSidebar: no se pudo mostrar sidebar (contexto no soportado)');
   }
 }
 
-// Las funciones initProperties, getConfig, saveConfig, extractDomain, getLabelName y getOrCreateLabel
-// ahora están implementadas en los módulos Config.gs y LabelManager.gs
-
 /**
- * @description Crea, actualiza o elimina el disparador (trigger) para el procesamiento automático diario.
- * @param {Boolean} enabled - `true` para crear o mantener el disparador, `false` para eliminarlo.
- * @param {Number} hour - La hora del día (0-23) en la que se debe ejecutar el disparador.
+ * @description Crea, actualiza o elimina el trigger para procesamiento automatico diario.
+ * @param {boolean} enabled - true para activar el trigger, false para desactivarlo
+ * @param {number} hour - Hora del dia (0-23) para la ejecucion
+ * @returns {boolean} true si la operacion fue exitosa
  */
 function updateTrigger(enabled, hour) {
   try {
-    // Eliminar todos los disparadores existentes
+    // Eliminar triggers previos de processEmails
     const triggers = ScriptApp.getProjectTriggers();
     for (const trigger of triggers) {
       if (trigger.getHandlerFunction() === 'processEmails') {
@@ -86,14 +72,13 @@ function updateTrigger(enabled, hour) {
       }
     }
 
-    // Si está habilitado, crear un nuevo disparador
     if (enabled) {
       ScriptApp.newTrigger('processEmails')
         .timeBased()
         .atHour(hour)
         .everyDays(1)
         .create();
-      Logger.log(`Trigger creado para ejecutarse a las ${hour}:00 todos los días`);
+      Logger.log('Trigger creado para las ' + hour + ':00 diario');
     } else {
       Logger.log('Trigger eliminado');
     }
@@ -104,5 +89,3 @@ function updateTrigger(enabled, hour) {
     return false;
   }
 }
-
-// La función processEmails ahora está implementada en EmailProcessor.gs
